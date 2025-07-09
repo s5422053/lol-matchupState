@@ -1,0 +1,30 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# Dependencies
+/node_modules
+
+# Build output
+/dist
+/build
+
+# Log files
+npm-debug.log*
+yarn-error.log
+pnpm-debug.log*
+
+# Environment variables
+# IMPORTANT: Never commit your API keys or other secrets!
+.env
+.env.local
+.env.*.local
+
+# IDE and editor directories
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Test coverage
+/coverage

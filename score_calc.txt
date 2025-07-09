@@ -1,0 +1,14 @@
+スコア計算式
+
+totalGold 1:+1
+Kills 1:+300
+Deaths 1:-500
+Assist 1:+150
+wardPlant 1:+100
+wardKill 1:+100
+
+totalDamageDealtToChampions 10:+1
+totalDamageTaken 10:+1
+
+BUILDING_KILL 1:+700
+ELITE_MONSTER_KILL 1:+500
