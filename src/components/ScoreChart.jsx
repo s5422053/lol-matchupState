@@ -1,4 +1,5 @@
 import React, { useMemo, useRef } from 'react';
+import { path } from 'd3-path';
 
 // --- 定数定義 ---
 const SVG_WIDTH = 1000;
@@ -99,9 +100,9 @@ const ScoreChart = ({
 }) => {
   const svgRef = useRef(null);
 
-  const { xScale, yScale, linePath, areaAbovePath, areaBelowPath, yTicks, xTicks, maxTime } = useMemo(() => {
+  const { xScale, yScale, linePath, areaPath, yTicks, xTicks, maxTime } = useMemo(() => {
     if (!chartData || chartData.length === 0) {
-      return { xScale: () => 0, yScale: () => 0, linePath: '', areaAbovePath: '', areaBelowPath: '', yTicks: [], xTicks: [], maxTime: 0 };
+      return { xScale: () => 0, yScale: () => 0, linePath: '', areaPath: '', yTicks: [], xTicks: [], maxTime: 0 };
     }
 
     const maxTime = Math.max(...chartData.map(d => d.time), 1);
@@ -110,12 +111,26 @@ const ScoreChart = ({
     const xScale = (time) => (time / maxTime) * CHART_WIDTH;
     const yScale = (score) => CHART_HEIGHT / 2 - (score / maxScoreAbs) * (CHART_HEIGHT / 2);
 
-    const lineGenerator = (d) => `${xScale(d.time)},${yScale(d.scoreDifference)}`;
-    const linePath = `M ${chartData.map(lineGenerator).join(' L ')}`;
+    // d3-pathを使用して折れ線のパスを生成
+    const linePathGenerator = path();
+    chartData.forEach((d, i) => {
+      const x = xScale(d.time);
+      const y = yScale(d.scoreDifference);
+      if (i === 0) {
+        linePathGenerator.moveTo(x, y);
+      } else {
+        linePathGenerator.lineTo(x, y);
+      }
+    });
+    const linePath = linePathGenerator.toString();
 
+    // d3-pathを使用してエリアのパスを生成
     const yZero = yScale(0);
-    const areaAbovePath = `M ${lineGenerator(chartData[0])} L ${chartData.slice(1).map(lineGenerator).join(' L ')} L ${xScale(maxTime)},${yZero} L ${xScale(0)},${yZero} Z`;
-    const areaBelowPath = `M ${lineGenerator(chartData[0])} L ${chartData.slice(1).map(lineGenerator).join(' L ')} L ${xScale(maxTime)},${yZero} L ${xScale(0)},${yZero} Z`;
+    const areaPathGenerator = path(linePath); // 折れ線のパスをコピーして開始
+    areaPathGenerator.lineTo(xScale(maxTime), yZero);
+    areaPathGenerator.lineTo(xScale(0), yZero);
+    areaPathGenerator.closePath();
+    const areaPath = areaPathGenerator.toString();
 
     const yTickCount = 5;
     const yTicks = Array.from({ length: yTickCount * 2 + 1 }, (_, i) => {
@@ -126,7 +141,7 @@ const ScoreChart = ({
     const xTickCount = Math.floor(maxTime / 5);
     const xTicks = Array.from({ length: xTickCount + 1 }, (_, i) => i * 5);
 
-    return { xScale, yScale, linePath, areaAbovePath, areaBelowPath, yTicks, xTicks, maxTime };
+    return { xScale, yScale, linePath, areaPath, yTicks, xTicks, maxTime };
   }, [chartData]);
 
   const handleClick = (event) => {
@@ -201,13 +216,13 @@ const ScoreChart = ({
 
           {/* 有利エリアと線 (青) */}
           <g clipPath="url(#clip-above)">
-            <path d={areaAbovePath} fill="#3b82f6" fillOpacity="0.1" />
+            <path d={areaPath} fill="#3b82f6" fillOpacity="0.1" />
             <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth="2" />
           </g>
 
           {/* 不利エリアと線 (赤) */}
           <g clipPath="url(#clip-below)">
-            <path d={areaBelowPath} fill="#ef4444" fillOpacity="0.1" />
+            <path d={areaPath} fill="#ef4444" fillOpacity="0.1" />
             <path d={linePath} fill="none" stroke="#ef4444" strokeWidth="2" />
           </g>
 
