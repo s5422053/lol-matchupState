@@ -50,17 +50,6 @@ const AxesAndGrid = ({ xScale, yScale, yTicks, xTicks }) => (
   </g>
 );
 
-const LineAndArea = ({ linePath, areaAbovePath, areaBelowPath, mainPlayerColor, opponentPlayerColor }) => (
-  <g>
-    {/* エリア（有利） */}
-    <path d={areaAbovePath} fill={mainPlayerColor} fillOpacity="0.1" />
-    {/* エリア（不利） */}
-    <path d={areaBelowPath} fill={opponentPlayerColor} fillOpacity="0.1" />
-    {/* スコア差の折れ線 */}
-    <path d={linePath} fill="none" stroke="url(#line-gradient)" strokeWidth="2" />
-  </g>
-);
-
 const EventMarker = ({ event, xScale, yScale, mainPlayerColor, opponentPlayerColor, mainPlayerId, opponentPlayerId }) => {
   const x = xScale(event.time);
   const y = yScale(0); // イベントは中央線上に表示
@@ -103,8 +92,8 @@ const ScoreChart = ({
   showKillEvents,
   showObjectEvents,
   onPointClick,
-  mainPlayerColor,
-  opponentPlayerColor,
+  mainPlayerColor, // イベントマーカーで使用
+  opponentPlayerColor, // イベントマーカーで使用
   mainPlayerId,
   opponentPlayerId,
 }) => {
@@ -193,13 +182,6 @@ const ScoreChart = ({
         onClick={handleClick}
       >
         <defs>
-          {/* 折れ線のグラデーション */}
-          <linearGradient id="line-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={mainPlayerColor} />
-            <stop offset="50%" stopColor="#9ca3af" /> {/* gray-400 */}
-            <stop offset="100%" stopColor={opponentPlayerColor} />
-          </linearGradient>
-
           {/* 有利エリアのクリップパス */}
           <clipPath id="clip-above">
             <rect x="0" y="0" width={CHART_WIDTH} height={yScale(0)} />
@@ -217,33 +199,23 @@ const ScoreChart = ({
         <g transform={`translate(${PADDING.left}, ${PADDING.top})`}>
           <AxesAndGrid xScale={xScale} yScale={yScale} yTicks={yTicks} xTicks={xTicks} />
 
-          {/* エリア（有利） */}
+          {/* 有利エリアと線 (青) */}
           <g clipPath="url(#clip-above)">
-            <LineAndArea
-              linePath={linePath}
-              areaAbovePath={areaAbovePath}
-              areaBelowPath={areaBelowPath}
-              mainPlayerColor={mainPlayerColor}
-              opponentPlayerColor={opponentPlayerColor}
-            />
+            <path d={areaAbovePath} fill="#3b82f6" fillOpacity="0.1" />
+            <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth="2" />
           </g>
 
-          {/* エリア（不利） */}
+          {/* 不利エリアと線 (赤) */}
           <g clipPath="url(#clip-below)">
-            <LineAndArea
-              linePath={linePath}
-              areaAbovePath={areaAbovePath}
-              areaBelowPath={areaBelowPath}
-              mainPlayerColor={mainPlayerColor}
-              opponentPlayerColor={opponentPlayerColor}
-            />
+            <path d={areaBelowPath} fill="#ef4444" fillOpacity="0.1" />
+            <path d={linePath} fill="none" stroke="#ef4444" strokeWidth="2" />
           </g>
 
           {/* イベントマーカー */}
           <g className="events-layer">
-            {visibleEvents.map((event, i) => (
+            {visibleEvents.map((event) => (
               <EventMarker
-                key={i}
+                key={`${event.type}-${event.time}-${event.killerId || event.victimId}`}
                 event={event}
                 xScale={xScale}
                 yScale={yScale}
@@ -261,4 +233,3 @@ const ScoreChart = ({
 };
 
 export default ScoreChart;
-
