@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { path } from 'd3-path';
 
 // --- 定数定義 ---
@@ -87,18 +87,107 @@ const EventMarker = ({ event, xScale, yScale, mainPlayerColor, opponentPlayerCol
   return null;
 };
 
+// --- 定数定義 (ChartTooltipから移植) ---
+const STAT_LABELS = {
+  gold: 'ゴールド',
+  kills: 'キル',
+  deaths: 'デス',
+  assists: 'アシスト',
+  wardsPlaced: 'ワード設置',
+  wardsKilled: 'ワード破壊',
+  damageDealt: 'チャンピオンへのダメージ',
+  damageTaken: '被ダメージ',
+  buildings: '建物破壊',
+  eliteMonsters: 'エピックモンスター',
+};
+
+const formatScore = (score) => Math.round(score).toLocaleString();
+
+// --- ヘルパーコンポーネント (ChartTooltipから移植) ---
+const getPlayerName = (player) => player.riotIdGameName || player.summonerName;
+
+const PlayerTooltipInfo = ({ player, stats, totalScore, isMainPlayer }) => {
+  const nameColor = isMainPlayer ? 'text-cyan-400' : 'text-red-400';
+  const bgColor = isMainPlayer ? 'bg-cyan-950/10' : 'bg-red-950/10';
+
+  const playerName = getPlayerName(player);
+
+  return (
+    <div className={`flex-1 ${bgColor} rounded-lg`}>
+      <div className="text-center mb-3">
+        <div className="flex justify-center items-baseline gap-2">
+            <p className="text-xs text-slate-400">合計スコア</p>
+            <h4 className={`text-lg font-bold ${nameColor}`}>
+                {playerName}
+            </h4>
+        </div>
+        <p className="text-xl font-semibold mt-1">{formatScore(totalScore)}</p>
+      </div>
+      <div className="text-sm">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-gray-600">
+              {isMainPlayer ? (
+                <>
+                  <th className="py-2 px-3 text-slate-400 font-semibold">項目</th>
+                  <th className="py-2 px-3 text-slate-400 font-semibold text-right">元の値</th>
+                  <th className="py-2 px-3 text-slate-400 font-semibold text-right">スコア</th>
+                </>
+              ) : (
+                <>
+                  <th className="py-2 px-3 text-slate-400 font-semibold">スコア</th>
+                  <th className="py-2 px-3 text-slate-400 font-semibold">元の値</th>
+                  <th className="py-2 px-3 text-slate-400 font-semibold">項目</th>
+                </>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(stats).map(([key, value]) => (
+              <tr key={key} className="border-b border-gray-800 hover:bg-gray-700/50">
+                {isMainPlayer ? (
+                  <>
+                    <td className="py-1 px-3 text-slate-400">{STAT_LABELS[key]}</td>
+                    <td className="py-1 px-3 text-right text-slate-300 font-semibold">{formatScore(value.raw)}</td>
+                    <td className={`py-1 px-3 text-right font-medium font-semibold ${value.weighted >= 0 ? 'text-slate-200' : 'text-red-400'}`}>
+                      {formatScore(value.weighted)}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className={`py-1 px-3 font-medium font-semibold ${value.weighted >= 0 ? 'text-slate-200' : 'text-red-400'}`}>
+                      {formatScore(value.weighted)}
+                    </td>
+                    <td className="py-1 px-3 text-slate-300 font-semibold">{formatScore(value.raw)}</td>
+                    <td className="py-1 px-3 text-slate-400">{STAT_LABELS[key]}</td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+
 const ScoreChart = ({
   chartData,
   gameEvents,
   showKillEvents,
   showObjectEvents,
-  onPointClick,
   mainPlayerColor, // イベントマーカーで使用
   opponentPlayerColor, // イベントマーカーで使用
-  mainPlayerId,
-  opponentPlayerId,
+  mainPlayer,
+  opponent,
 }) => {
   const svgRef = useRef(null);
+  const [hoverX, setHoverX] = useState(null);
+  const [hoveredData, setHoveredData] = useState(null);
+
+  const mainPlayerId = mainPlayer?.participantId;
+  const opponentPlayerId = opponent?.participantId;
 
   const { xScale, yScale, linePath, areaPath, yTicks, xTicks, maxTime } = useMemo(() => {
     if (!chartData || chartData.length === 0) {
@@ -111,25 +200,30 @@ const ScoreChart = ({
     const xScale = (time) => (time / maxTime) * CHART_WIDTH;
     const yScale = (score) => CHART_HEIGHT / 2 - (score / maxScoreAbs) * (CHART_HEIGHT / 2);
 
-    // d3-pathを使用して折れ線のパスを生成
+    // d3-pathを使用してパスを生成
     const linePathGenerator = path();
+    const areaPathGenerator = path();
+
     chartData.forEach((d, i) => {
       const x = xScale(d.time);
       const y = yScale(d.scoreDifference);
       if (i === 0) {
         linePathGenerator.moveTo(x, y);
+        areaPathGenerator.moveTo(x, y);
       } else {
         linePathGenerator.lineTo(x, y);
+        areaPathGenerator.lineTo(x, y);
       }
     });
     const linePath = linePathGenerator.toString();
 
-    // d3-pathを使用してエリアのパスを生成
+    // エリアのパスを閉じる
     const yZero = yScale(0);
-    const areaPathGenerator = path(linePath); // 折れ線のパスをコピーして開始
-    areaPathGenerator.lineTo(xScale(maxTime), yZero);
-    areaPathGenerator.lineTo(xScale(0), yZero);
-    areaPathGenerator.closePath();
+    if (chartData.length > 0) {
+      areaPathGenerator.lineTo(xScale(maxTime), yZero);
+      areaPathGenerator.lineTo(xScale(0), yZero);
+      areaPathGenerator.closePath();
+    }
     const areaPath = areaPathGenerator.toString();
 
     const yTickCount = 5;
@@ -144,41 +238,36 @@ const ScoreChart = ({
     return { xScale, yScale, linePath, areaPath, yTicks, xTicks, maxTime };
   }, [chartData]);
 
-  const handleClick = (event) => {
+  const handleMouseMove = (event) => {
     if (!svgRef.current || chartData.length === 0) return;
-
     const svgRect = svgRef.current.getBoundingClientRect();
-    // 1. Calculate the click's X coordinate relative to the SVG element's left edge.
-    const clickXInSvg = event.clientX - svgRect.left;
+    // SVG要素内でのマウスのX座標を計算
+    const moveXInSvg = event.clientX - svgRect.left;
+    // viewBox座標系に変換
+    const viewBoxX = (moveXInSvg / svgRect.width) * SVG_WIDTH;
 
-    // 2. Convert the click's X coordinate to the viewBox's coordinate system.
-    // This accounts for the responsive scaling of the SVG.
-    const viewBoxX = (clickXInSvg / svgRect.width) * SVG_WIDTH;
+    if (viewBoxX >= PADDING.left && viewBoxX <= SVG_WIDTH - PADDING.right) {
+      setHoverX(viewBoxX);
 
-    // 3. Calculate the click's X coordinate relative to the chart area's left edge (inside the viewBox).
-    const clickXInChartArea = viewBoxX - PADDING.left;
+      // ホバー位置に対応するデータポイントを見つける
+      const hoverXInChartArea = viewBoxX - PADDING.left;
+      const timeRatio = Math.max(0, Math.min(1, hoverXInChartArea / CHART_WIDTH));
+      const timeAtHover = timeRatio * maxTime;
 
-    // 4. Calculate the ratio of the click position within the chart's width.
-    // Clamp the value between 0 and 1 to handle clicks in the padding area.
-    const timeRatio = Math.max(0, Math.min(1, clickXInChartArea / CHART_WIDTH));
+      const closestPoint = chartData.reduce((prev, curr) =>
+        Math.abs(curr.time - timeAtHover) < Math.abs(prev.time - timeAtHover) ? curr : prev
+      );
+      setHoveredData(closestPoint);
 
-    // 5. Calculate the game time at the clicked position.
-    const timeAtClick = timeRatio * maxTime;
+    } else {
+      setHoverX(null);
+      setHoveredData(null);
+    }
+  };
 
-    // クリックされた時間に最も近いデータポイントを見つける
-    const closestPoint = chartData.reduce((prev, curr) =>
-      Math.abs(curr.time - timeAtClick) < Math.abs(prev.time - timeAtClick) ? curr : prev
-    );
-
-    const pointX = PADDING.left + xScale(closestPoint.time);
-    const pointY = PADDING.top + yScale(closestPoint.scoreDifference);
-
-    onPointClick({
-      ...closestPoint,
-      x: svgRect.left + pointX,
-      y: svgRect.top + pointY,
-      parentRect: svgRect,
-    });
+  const handleMouseLeave = () => {
+    setHoverX(null);
+    setHoveredData(null);
   };
 
   const visibleEvents = useMemo(() => {
@@ -189,12 +278,13 @@ const ScoreChart = ({
   }, [gameEvents, showKillEvents, showObjectEvents]);
 
   return (
-    <div className="w-full h-full flex justify-center items-center">
+    <div className="w-full h-full flex flex-col justify-center items-center">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-        className="w-full h-auto"
-        onClick={handleClick}
+        className="w-full h-auto cursor-pointer"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
       >
         <defs>
           {/* 有利エリアのクリップパス */}
@@ -228,6 +318,18 @@ const ScoreChart = ({
 
           {/* イベントマーカー */}
           <g className="events-layer">
+            {/* ホバー時の縦線 */}
+            {hoverX !== null && (
+              <line
+                x1={hoverX - PADDING.left}
+                y1={0}
+                x2={hoverX - PADDING.left}
+                y2={CHART_HEIGHT}
+                className="stroke-slate-400"
+                strokeWidth="1"
+                pointerEvents="none" // この線がマウスイベントを妨げないようにする
+              />
+            )}
             {visibleEvents.map((event) => (
               <EventMarker
                 key={`${event.type}-${event.time}-${event.killerId || event.victimId}`}
@@ -243,6 +345,77 @@ const ScoreChart = ({
           </g>
         </g>
       </svg>
+
+      {/* スコア内訳表示エリア */}
+      <div className="w-full max-w-5xl mt-1 p-4 bg-gray-900/80 rounded-lg text-slate-200 shadow-lg min-h-[250px]">
+        {hoveredData ? (
+          <div className="flex gap-2 justify-center items-start">
+            {/* 自プレイヤー */}
+            {mainPlayer && hoveredData.mainPlayerStats && (
+              <PlayerTooltipInfo
+                player={mainPlayer}
+                stats={hoveredData.mainPlayerStats}
+                totalScore={hoveredData.mainPlayerScore}
+                isMainPlayer={true}
+              />
+            )}
+
+            {/* 中央のスコア差表示 */}
+            <div className="flex-shrink-0">
+                {/* 左右のテーブルと高さを合わせるためのヘッダー部分 */}
+                <div className="text-center mb-3">
+                    <div className="flex justify-center items-baseline gap-2 h-[28px]">
+                         <p className="text-xs text-slate-400">タイムスタンプ</p>
+                    </div>
+                    <p className="text-xl font-semibold mt-1">
+                        {Math.floor(hoveredData.time)}:{Math.round((hoveredData.time % 1) * 60).toString().padStart(2, '0')}
+                    </p>
+                </div>
+                {/* スコア差テーブル */}
+                <div className="text-sm">
+                    <table className="w-full border-collapse">
+                        <thead>
+                            <tr className="border-b border-gray-600">
+                                <th className="py-2 px-3 text-slate-400 font-semibold text-center">スコア差</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Object.keys(STAT_LABELS).map(key => {
+                                const mainValue = hoveredData.mainPlayerStats[key]?.weighted || 0;
+                                const oppValue = hoveredData.opponentPlayerStats[key]?.weighted || 0;
+                                const diff = mainValue - oppValue;
+                                const color = diff >= 0 ? 'text-cyan-400' : 'text-red-400';
+                                const sign = diff >= 0 ? '+' : '';
+
+                                return (
+                                    <tr key={key} className="border-b border-gray-800">
+                                        <td className={`py-1 px-3 text-center font-semibold ${color}`}>
+                                            {sign}{formatScore(diff)}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* 敵プレイヤー */}
+            {opponent && hoveredData.opponentPlayerStats && (
+              <PlayerTooltipInfo
+                player={opponent}
+                stats={hoveredData.opponentPlayerStats}
+                totalScore={hoveredData.opponentPlayerScore}
+                isMainPlayer={false}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-center text-slate-400">グラフにカーソルを合わせて、特定の時点での詳細データを表示します。</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

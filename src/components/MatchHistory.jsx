@@ -88,7 +88,7 @@ const MatchHistory = ({ matches, onSelectMatch, selectedMatchId, puuid, selected
   }
 
   return (
-    <div className="w-full max-w-4xl flex flex-col gap-3">
+    <div className="w-full max-w-4xl flex flex-col gap-2">
       {matches.map(matchDataItem => {
         const matchId = matchDataItem.match.metadata.matchId;
         const isSelected = selectedMatchId === matchId;

@@ -56,7 +56,7 @@ const MatchDetail = ({ matchData }) => {
   }
 
   return (
-    <div className="w-full max-w-5xl bg-gray-800 rounded-lg p-6 mt-4">
+    <div className="w-full max-w-5xl bg-gray-800 rounded-lg p-6 mt-2">
       <div className="flex justify-center items-center gap-6 mb-4">
         <h3 className="text-lg font-semibold">チャートオプション:</h3>
         <label className="flex items-center gap-2 cursor-pointer text-sm">
@@ -88,8 +88,8 @@ const MatchDetail = ({ matchData }) => {
           onPointClick={handleChartClick}
           mainPlayerColor={mainPlayer.win ? '#3b82f6' : '#ef4444'} // blue-500 or red-500
           opponentPlayerColor={opponent.win ? '#3b82f6' : '#ef4444'}
-          mainPlayerId={mainPlayer.participantId}
-          opponentPlayerId={opponent.participantId}
+          mainPlayer={mainPlayer}
+          opponent={opponent}
         />
         {tooltipData && (
           <ChartTooltip

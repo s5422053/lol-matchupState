@@ -76,8 +76,10 @@ export function processTimelineData(timeline, mainPlayerId, opponentPlayerId) {
       const mainPlayerStats = calculateFrameStats(mainPlayerFrame, mainPlayerEventScores);
       const opponentPlayerStats = calculateFrameStats(opponentPlayerFrame, opponentPlayerEventScores);
 
-      const mainPlayerTotalScore = Object.values(mainPlayerStats).reduce((a, b) => a + b, 0);
-      const opponentPlayerTotalScore = Object.values(opponentPlayerStats).reduce((a, b) => a + b, 0);
+      const calculateTotalScore = (stats) => Object.values(stats).reduce((sum, val) => sum + val.weighted, 0);
+
+      const mainPlayerTotalScore = calculateTotalScore(mainPlayerStats);
+      const opponentPlayerTotalScore = calculateTotalScore(opponentPlayerStats);
 
       const scoreDifference = mainPlayerTotalScore - opponentPlayerTotalScore;
 
@@ -161,16 +163,42 @@ function collectGameEvents(event, mainPlayerId, opponentPlayerId, gameEvents) {
  */
 function calculateFrameStats(pFrame, eventScores) {
   const { damageStats } = pFrame;
-  return {
-    gold: (pFrame.totalGold ?? 0) * SCORE_WEIGHTS.totalGold,
-    kills: eventScores.kills,
-    deaths: eventScores.deaths,
-    assists: eventScores.assists,
-    wardsPlaced: eventScores.wardsPlaced,
-    wardsKilled: eventScores.wardsKilled,
-    damageDealt: (damageStats?.totalDamageDoneToChampions ?? 0) * SCORE_WEIGHTS.totalDamageDoneToChampions,
-    damageTaken: (damageStats?.totalDamageTaken ?? 0) * SCORE_WEIGHTS.totalDamageTaken,
-    buildings: eventScores.buildingKill,
-    eliteMonsters: eventScores.eliteMonsterKill,
+  // 元の値を保持するオブジェクト
+  const rawStats = {
+    gold: pFrame.totalGold ?? 0,
+    kills: eventScores.kills / (SCORE_WEIGHTS.kills || 1),
+    deaths: eventScores.deaths / (SCORE_WEIGHTS.deaths || 1),
+    assists: eventScores.assists / (SCORE_WEIGHTS.assists || 1),
+    wardsPlaced: eventScores.wardsPlaced / (SCORE_WEIGHTS.wardsPlaced || 1),
+    wardsKilled: eventScores.wardsKilled / (SCORE_WEIGHTS.wardsKilled || 1),
+    damageDealt: damageStats?.totalDamageDoneToChampions ?? 0,
+    damageTaken: damageStats?.totalDamageTaken ?? 0,
+    buildings: eventScores.buildingKill / (SCORE_WEIGHTS.buildingKill || 1),
+    eliteMonsters: eventScores.eliteMonsterKill / (SCORE_WEIGHTS.eliteMonsterKill || 1),
   };
+
+  // ウェイト適用後のスコアを計算
+  const weightedStats = {
+    gold: rawStats.gold * SCORE_WEIGHTS.totalGold,
+    kills: rawStats.kills * SCORE_WEIGHTS.kills,
+    deaths: rawStats.deaths * SCORE_WEIGHTS.deaths,
+    assists: rawStats.assists * SCORE_WEIGHTS.assists,
+    wardsPlaced: rawStats.wardsPlaced * SCORE_WEIGHTS.wardsPlaced,
+    wardsKilled: rawStats.wardsKilled * SCORE_WEIGHTS.wardsKilled,
+    damageDealt: rawStats.damageDealt * SCORE_WEIGHTS.totalDamageDoneToChampions,
+    damageTaken: rawStats.damageTaken * SCORE_WEIGHTS.totalDamageTaken,
+    buildings: rawStats.buildings * SCORE_WEIGHTS.buildingKill,
+    eliteMonsters: rawStats.eliteMonsters * SCORE_WEIGHTS.eliteMonsterKill,
+  };
+
+  // 表示用に両方の値を持つオブジェクトを作成
+  const displayStats = {};
+  for (const key in rawStats) {
+    displayStats[key] = {
+      raw: rawStats[key],
+      weighted: weightedStats[key]
+    };
+  }
+
+  return displayStats;
 }
