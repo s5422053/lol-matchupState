@@ -154,7 +154,7 @@ function App() {
   return (
     <div className="bg-gray-900 text-slate-200 min-h-screen font-sans">
       <header className="text-center py-10">
-        <h1 className="text-5xl font-bold text-cyan-400">LoL Matchup Stats</h1>
+        <h1 className="text-5xl font-bold text-cyan-400">LoL Lane Diff Visualizer</h1>
         <p className="text-xl text-slate-400 mt-2">対面プレイヤーとの影響力差を可視化</p>
       </header>
       <main className="container mx-auto px-4 pb-10 flex flex-col items-center gap-8">
