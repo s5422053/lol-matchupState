@@ -192,7 +192,7 @@ const CenterColumn = ({ time, mainPlayerStats, opponentPlayerStats }) => (
 
                         return (
                             <tr key={key} className="border-b border-gray-800">
-                                <td className={`py-1 px-3 text-center font-mono ${color}`}>
+                                <td className={`py-1 px-3 text-center font-semibold ${color}`}>
                                     {sign}{formatScore(diff)}
                                 </td>
                             </tr>
