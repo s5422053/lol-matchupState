@@ -1,16 +1,6 @@
 import React from 'react';
 import MatchDetail from './MatchDetail';
-
-const DDRAGON_VERSION = '15.13.1'; // 最新のバージョンに適宜更新してください
-const CHAMPION_IMAGE_URL = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/`;
-
-const getChampionImage = (championName) => {
-  // FiddleSticks -> Fiddlesticks のような名前の揺れに対応
-  if (championName === 'FiddleSticks') {
-    championName = 'Fiddlesticks';
-  }
-  return `${CHAMPION_IMAGE_URL}${championName}.png`;
-};
+import { getChampionImage } from '../utils/ddragon';
 
 const formatDuration = (seconds) => {
   const minutes = Math.floor(seconds / 60);
@@ -51,7 +41,7 @@ const MatchSummary = ({ matchData, onSelectMatch, selectedMatchId, puuid }) => {
     : 'border-l-4 border-red-500 hover:border-red-400';
   const selectedClass = isSelected
     ? '!border-cyan-400 scale-105 shadow-lg shadow-cyan-500/10'
-    : 'border-gray-700 hover:bg-gray-700/50';
+    : 'hover:bg-gray-700/50';
 
   return (
     <div
@@ -81,7 +71,7 @@ const MatchSummary = ({ matchData, onSelectMatch, selectedMatchId, puuid }) => {
   );
 };
 
-const MatchHistory = ({ matches, onSelectMatch, selectedMatchId, puuid, selectedMatchData }) => {
+const MatchHistory = ({ matches, onSelectMatch, selectedMatchId, puuid, selectedMatchData, onLoadMore, hasMore, loading, onPlayerSelect }) => {
   if (!matches || matches.length === 0) {
     // ローディング中やエラー表示はApp.jsx側で行うため、ここでは何も表示しない
     return null;
@@ -102,11 +92,23 @@ const MatchHistory = ({ matches, onSelectMatch, selectedMatchId, puuid, selected
               puuid={puuid}
             />
             {isSelected && selectedMatchData?.timeline && (
-              <MatchDetail key={`${matchId}-detail`} matchData={selectedMatchData} />
+              <MatchDetail key={`${matchId}-detail`} matchData={selectedMatchData} onPlayerSelect={onPlayerSelect} />
             )}
           </React.Fragment>
         );
       })}
+
+      {hasMore && (
+        <div className="flex justify-center mt-4">
+            <button 
+                onClick={onLoadMore}
+                disabled={loading}
+                className="bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-6 rounded-lg transition-colors duration-200 shadow-lg"
+            >
+                {loading ? '読み込み中...' : 'さらに読み込む'}
+            </button>
+        </div>
+      )}
     </div>
   );
 };

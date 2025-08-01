@@ -61,10 +61,12 @@ export function processTimelineData(timeline, mainPlayerId, opponentPlayerId) {
     // 1分以降のフレームのみを処理
     if (frame.timestamp === 0) continue;
 
+    const processedWardEvents = new Set(); // このフレームで処理したワードイベントを記録
+
     // フレーム内のイベントを処理
     for (const event of frame.events) {
       // イベントベースのスコアを更新
-      updateEventScores(event, mainPlayerId, opponentPlayerId, mainPlayerEventScores, opponentPlayerEventScores);
+      updateEventScores(event, mainPlayerId, opponentPlayerId, mainPlayerEventScores, opponentPlayerEventScores, processedWardEvents);
       // チャートに表示する重要なゲームイベントを収集
       collectGameEvents(event, mainPlayerId, opponentPlayerId, gameEvents);
     }
@@ -100,41 +102,51 @@ export function processTimelineData(timeline, mainPlayerId, opponentPlayerId) {
 /**
  * イベントオブジェクトを元に、プレイヤーのイベントスコアを更新します。
  */
-function updateEventScores(event, mainPlayerId, opponentPlayerId, mainPlayerEventScores, opponentPlayerEventScores) {
+function updateEventScores(event, mainPlayerId, opponentPlayerId, mainPlayerEventScores, opponentPlayerEventScores, processedWardEvents) {
   switch (event.type) {
     case 'CHAMPION_KILL':
-      if (event.killerId === mainPlayerId) mainPlayerEventScores.kills += SCORE_WEIGHTS.kills;
-      else if (event.killerId === opponentPlayerId) opponentPlayerEventScores.kills += SCORE_WEIGHTS.kills;
+      if (event.killerId === mainPlayerId) mainPlayerEventScores.kills += 1;
+      else if (event.killerId === opponentPlayerId) opponentPlayerEventScores.kills += 1;
 
-      if (event.victimId === mainPlayerId) mainPlayerEventScores.deaths += SCORE_WEIGHTS.deaths;
-      else if (event.victimId === opponentPlayerId) opponentPlayerEventScores.deaths += SCORE_WEIGHTS.deaths;
+      if (event.victimId === mainPlayerId) mainPlayerEventScores.deaths += 1;
+      else if (event.victimId === opponentPlayerId) opponentPlayerEventScores.deaths += 1;
 
       if (event.assistingParticipantIds?.includes(mainPlayerId)) {
-        mainPlayerEventScores.assists += SCORE_WEIGHTS.assists;
+        mainPlayerEventScores.assists += 1;
       }
       if (event.assistingParticipantIds?.includes(opponentPlayerId)) {
-        opponentPlayerEventScores.assists += SCORE_WEIGHTS.assists;
+        opponentPlayerEventScores.assists += 1;
       }
       break;
 
     case 'WARD_PLACED':
-      if (event.creatorId === mainPlayerId) mainPlayerEventScores.wardsPlaced += SCORE_WEIGHTS.wardsPlaced;
-      else if (event.creatorId === opponentPlayerId) opponentPlayerEventScores.wardsPlaced += SCORE_WEIGHTS.wardsPlaced;
+      const wardPlacedKey = `placed-${event.creatorId}-${event.timestamp}`;
+      if (processedWardEvents.has(wardPlacedKey)) break; // 重複はスキップ
+
+      if (event.creatorId === mainPlayerId) mainPlayerEventScores.wardsPlaced += 1;
+      else if (event.creatorId === opponentPlayerId) opponentPlayerEventScores.wardsPlaced += 1;
+      
+      processedWardEvents.add(wardPlacedKey); // 処理済みとして記録
       break;
 
     case 'WARD_KILL':
-      if (event.killerId === mainPlayerId) mainPlayerEventScores.wardsKilled += SCORE_WEIGHTS.wardsKilled;
-      else if (event.killerId === opponentPlayerId) opponentPlayerEventScores.wardsKilled += SCORE_WEIGHTS.wardsKilled;
+      const wardKillKey = `killed-${event.killerId}-${event.timestamp}`;
+      if (processedWardEvents.has(wardKillKey)) break; // 重複はスキップ
+
+      if (event.killerId === mainPlayerId) mainPlayerEventScores.wardsKilled += 1;
+      else if (event.killerId === opponentPlayerId) opponentPlayerEventScores.wardsKilled += 1;
+      
+      processedWardEvents.add(wardKillKey); // 処理済みとして記録
       break;
 
     case 'BUILDING_KILL':
-      if (event.killerId === mainPlayerId) mainPlayerEventScores.buildingKill += SCORE_WEIGHTS.buildingKill;
-      else if (event.killerId === opponentPlayerId) opponentPlayerEventScores.buildingKill += SCORE_WEIGHTS.buildingKill;
+      if (event.killerId === mainPlayerId) mainPlayerEventScores.buildingKill += 1;
+      else if (event.killerId === opponentPlayerId) opponentPlayerEventScores.buildingKill += 1;
       break;
 
     case 'ELITE_MONSTER_KILL':
-      if (event.killerId === mainPlayerId) mainPlayerEventScores.eliteMonsterKill += SCORE_WEIGHTS.eliteMonsterKill;
-      else if (event.killerId === opponentPlayerId) opponentPlayerEventScores.eliteMonsterKill += SCORE_WEIGHTS.eliteMonsterKill;
+      if (event.killerId === mainPlayerId) mainPlayerEventScores.eliteMonsterKill += 1;
+      else if (event.killerId === opponentPlayerId) opponentPlayerEventScores.eliteMonsterKill += 1;
       break;
   }
 }
@@ -146,8 +158,8 @@ function collectGameEvents(event, mainPlayerId, opponentPlayerId, gameEvents) {
   const time = event.timestamp / 60000; // msを分に変換
 
   if (event.type === 'CHAMPION_KILL') {
-    // 自身または対面が関与するキルイベントのみを収集
-    if ([event.killerId, event.victimId, ...(event.assistingParticipantIds || [])].some(id => id === mainPlayerId || id === opponentPlayerId)) {
+    // 自身または対面がキルした場合のみイベントを収集
+    if (event.killerId === mainPlayerId || event.killerId === opponentPlayerId) {
       gameEvents.push({ type: 'KILL', time, killerId: event.killerId, victimId: event.victimId });
     }
   } else if (event.type === 'BUILDING_KILL' || event.type === 'ELITE_MONSTER_KILL') {
@@ -166,15 +178,15 @@ function calculateFrameStats(pFrame, eventScores) {
   // 元の値を保持するオブジェクト
   const rawStats = {
     gold: pFrame.totalGold ?? 0,
-    kills: eventScores.kills / (SCORE_WEIGHTS.kills || 1),
-    deaths: eventScores.deaths / (SCORE_WEIGHTS.deaths || 1),
-    assists: eventScores.assists / (SCORE_WEIGHTS.assists || 1),
-    wardsPlaced: eventScores.wardsPlaced / (SCORE_WEIGHTS.wardsPlaced || 1),
-    wardsKilled: eventScores.wardsKilled / (SCORE_WEIGHTS.wardsKilled || 1),
+    kills: eventScores.kills,
+    deaths: eventScores.deaths,
+    assists: eventScores.assists,
+    wardsPlaced: eventScores.wardsPlaced,
+    wardsKilled: eventScores.wardsKilled,
     damageDealt: damageStats?.totalDamageDoneToChampions ?? 0,
     damageTaken: damageStats?.totalDamageTaken ?? 0,
-    buildings: eventScores.buildingKill / (SCORE_WEIGHTS.buildingKill || 1),
-    eliteMonsters: eventScores.eliteMonsterKill / (SCORE_WEIGHTS.eliteMonsterKill || 1),
+    buildings: eventScores.buildingKill,
+    eliteMonsters: eventScores.eliteMonsterKill,
   };
 
   // ウェイト適用後のスコアを計算
