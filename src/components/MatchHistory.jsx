@@ -28,7 +28,7 @@ const MatchSummary = ({ matchData, onSelectMatch, selectedMatchId, puuid }) => {
   const { info, metadata } = matchData.match;
   const mainPlayer = info.participants.find(p => p.puuid === puuid);
 
-  if (!mainPlayer) return null; // 検索したプレイヤーが試合にいない場合はスキップ
+  if (!mainPlayer) return null;
 
   const opponent = mainPlayer.teamPosition ? info.participants.find(p =>
     p.teamId !== mainPlayer.teamId && p.teamPosition === mainPlayer.teamPosition
@@ -62,7 +62,6 @@ const MatchSummary = ({ matchData, onSelectMatch, selectedMatchId, puuid }) => {
         <PlayerInfo player={mainPlayer} />
       </div>
 
-      {/* 平均スコア差 */}
       <div className="text-center">
         <p className="text-xs text-slate-500">平均スコア差</p>
         <p className={`text-lg font-bold ${scoreDiffColor}`}>
@@ -81,9 +80,26 @@ const MatchSummary = ({ matchData, onSelectMatch, selectedMatchId, puuid }) => {
   );
 };
 
-const MatchHistory = ({ matches, onSelectMatch, selectedMatchId, puuid, selectedMatchData, onLoadMore, hasMore, loading, onPlayerSelect }) => {
+const MatchHistory = ({
+  matches,
+  onSelectMatch,
+  selectedMatchId,
+  puuid,
+  // Props for MatchDetail
+  selectedMatchData,
+  mainPlayer,
+  opponent,
+  chartData,
+  gameEvents,
+  selectedRole,
+  onPlayerSelect,
+  onSearchPlayer,
+  // Props for loading more
+  onLoadMore,
+  hasMore,
+  loading,
+}) => {
   if (!matches || matches.length === 0) {
-    // ローディング中やエラー表示はApp.jsx側で行うため、ここでは何も表示しない
     return null;
   }
 
@@ -101,8 +117,18 @@ const MatchHistory = ({ matches, onSelectMatch, selectedMatchId, puuid, selected
               selectedMatchId={selectedMatchId}
               puuid={puuid}
             />
-            {isSelected && selectedMatchData?.timeline && (
-              <MatchDetail key={`${matchId}-detail`} matchData={selectedMatchData} onPlayerSelect={onPlayerSelect} />
+            {isSelected && selectedMatchData && (
+              <MatchDetail
+                key={`${matchId}-detail`}
+                matchData={selectedMatchData}
+                mainPlayer={mainPlayer}
+                opponent={opponent}
+                chartData={chartData}
+                gameEvents={gameEvents}
+                selectedRole={selectedRole}
+                onPlayerSelect={onPlayerSelect}
+                onSearchPlayer={onSearchPlayer}
+              />
             )}
           </React.Fragment>
         );

@@ -30,6 +30,27 @@ export function processTimelineData(timeline, mainPlayerPuuid, opponentPuuid) {
   const mainPlayerId = mainPlayerTimelineParticipant.participantId;
   const opponentPlayerId = opponentTimelineParticipant.participantId;
 
+  // Pre-scan for abnormal ward counts
+  let mainPlayerTotalWards = 0;
+  let opponentPlayerTotalWards = 0;
+  const processedWardEventsPreScan = new Set();
+  for (const frame of timeline.info.frames) {
+    for (const event of frame.events) {
+      if (event.type === 'WARD_PLACED') {
+        const wardPlacedKey = `placed-${event.creatorId}-${event.timestamp}`;
+        if (processedWardEventsPreScan.has(wardPlacedKey)) continue;
+        if (event.creatorId === mainPlayerId) {
+          mainPlayerTotalWards++;
+        } else if (event.creatorId === opponentPlayerId) {
+          opponentPlayerTotalWards++;
+        }
+        processedWardEventsPreScan.add(wardPlacedKey);
+      }
+    }
+  }
+
+  const isWardCountAbnormal = mainPlayerTotalWards > 200 || opponentPlayerTotalWards > 200;
+
   const mainPlayerEventScores = { kills: 0, deaths: 0, assists: 0, wardsPlaced: 0, wardsKilled: 0, buildingKill: 0, eliteMonsterKill: 0 };
   const opponentPlayerEventScores = { ...mainPlayerEventScores };
 
@@ -49,8 +70,8 @@ export function processTimelineData(timeline, mainPlayerPuuid, opponentPuuid) {
     const opponentPlayerFrame = frame.participantFrames[opponentPlayerId];
 
     if (mainPlayerFrame && opponentPlayerFrame) {
-      const mainPlayerStats = calculateFrameStats(mainPlayerFrame, mainPlayerEventScores);
-      const opponentPlayerStats = calculateFrameStats(opponentPlayerFrame, opponentPlayerEventScores);
+      const mainPlayerStats = calculateFrameStats(mainPlayerFrame, mainPlayerEventScores, isWardCountAbnormal);
+      const opponentPlayerStats = calculateFrameStats(opponentPlayerFrame, opponentPlayerEventScores, isWardCountAbnormal);
 
       const calculateTotalScore = (stats) => Object.values(stats).reduce((sum, val) => sum + val.weighted, 0);
 
@@ -136,14 +157,14 @@ function collectGameEvents(event, mainPlayerId, opponentPlayerId, gameEvents) {
   }
 }
 
-function calculateFrameStats(pFrame, eventScores) {
+function calculateFrameStats(pFrame, eventScores, isWardCountAbnormal) {
   const { damageStats } = pFrame;
   const rawStats = {
     gold: pFrame.totalGold ?? 0,
     kills: eventScores.kills,
     deaths: eventScores.deaths,
     assists: eventScores.assists,
-    wardsPlaced: eventScores.wardsPlaced,
+    wardsPlaced: isWardCountAbnormal ? -1 : eventScores.wardsPlaced,
     wardsKilled: eventScores.wardsKilled,
     damageDealt: damageStats?.totalDamageDoneToChampions ?? 0,
     damageTaken: damageStats?.totalDamageTaken ?? 0,

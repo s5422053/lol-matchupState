@@ -1,45 +1,38 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import SearchForm from './components/SearchForm';
 import MatchHistory from './components/MatchHistory';
+import MatchDetail from './components/MatchDetail'; // MatchDetailを直接使う可能性
 import { getAccountByRiotId, getMatchIdsByPuuid, getMatchDetails, getMatchTimeline } from './api/riotApi';
 import { processTimelineData } from './utils/scoreCalculator';
 
-const MATCH_COUNT_PER_PAGE = 5; // 初期読み込み数を5に変更
+const MATCH_COUNT_PER_PAGE = 5;
 const MATCH_ID_COUNT_PER_API_CALL = 100;
 
 function App() {
-  const [matchData, setMatchData] = useState([]);
+  // Search and data states
+  const [allMatchData, setAllMatchData] = useState([]);
   const [allMatchIds, setAllMatchIds] = useState([]);
   const [displayedMatchesCount, setDisplayedMatchesCount] = useState(MATCH_COUNT_PER_PAGE);
   const [apiMatchStart, setApiMatchStart] = useState(0);
   const [hasMoreMatches, setHasMoreMatches] = useState(true);
-
-  const [selectedMatchId, setSelectedMatchId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchedPuuid, setSearchedPuuid] = useState(null);
 
-  const fetchMatchesAndTimeline = useCallback(async (matchIds, puuid) => {
+  // Selected match and player states
+  const [selectedMatchId, setSelectedMatchId] = useState(null);
+  const [selectedRole, setSelectedRole] = useState(null);
+  const [mainPlayer, setMainPlayer] = useState(null);
+  const [opponent, setOpponent] = useState(null);
+  const [chartData, setChartData] = useState([]);
+  const [gameEvents, setGameEvents] = useState([]);
+
+  const fetchFullMatchDetails = useCallback(async (matchIds) => {
     return Promise.all(
       matchIds.map(async (matchId) => {
         const match = await getMatchDetails(matchId);
         const timeline = await getMatchTimeline(matchId);
-
-        const mainPlayer = match.info.participants.find(p => p.puuid === puuid);
-        const opponent = mainPlayer ? match.info.participants.find(p => 
-            p.teamId !== mainPlayer.teamId && p.teamPosition === mainPlayer.teamPosition
-        ) : null;
-
-        let averageScoreDifference = 0;
-        let processedTimeline = { chartData: [], gameEvents: [] };
-
-        if (mainPlayer && opponent && timeline) {
-            const { averageScoreDifference: avgDiff, ...rest } = processTimelineData(timeline, mainPlayer.puuid, opponent.puuid);
-            averageScoreDifference = avgDiff;
-            processedTimeline = rest; // chartData and gameEvents
-        }
-
-        return { match, timeline: processedTimeline, puuid, averageScoreDifference };
+        return { match, timeline };
       })
     );
   }, []);
@@ -51,19 +44,21 @@ function App() {
     }
     const [gameName, tagLine] = riotId.split('#');
 
-    if (!gameName || !tagLine) {
-      setError('正しい形式でRiot IDを入力してください (例: PlayerName#JP1)。');
-      return;
-    }
     setLoading(true);
     setError(null);
-    setMatchData([]);
+    setAllMatchData([]);
     setAllMatchIds([]);
     setSelectedMatchId(null);
     setSearchedPuuid(null);
     setDisplayedMatchesCount(MATCH_COUNT_PER_PAGE);
     setApiMatchStart(0);
     setHasMoreMatches(true);
+    // Reset player/chart states
+    setMainPlayer(null);
+    setOpponent(null);
+    setChartData([]);
+    setGameEvents([]);
+    setSelectedRole(null);
 
     try {
       const account = await getAccountByRiotId(gameName, tagLine);
@@ -78,76 +73,112 @@ function App() {
       }
 
       const initialMatchIds = matchIds.slice(0, MATCH_COUNT_PER_PAGE);
-      const matchesDetails = await fetchMatchesAndTimeline(initialMatchIds, account.puuid);
-      setMatchData(matchesDetails);
+      const matchesDetails = await fetchFullMatchDetails(initialMatchIds);
+      
+      const processedMatches = matchesDetails.map(({ match, timeline }) => {
+        const mainP = match.info.participants.find(p => p.puuid === account.puuid);
+        const opp = mainP ? match.info.participants.find(p => p.teamId !== mainP.teamId && p.teamPosition === mainP.teamPosition) : null;
+        const { averageScoreDifference } = processTimelineData(timeline, mainP?.puuid, opp?.puuid);
+        return { match, timeline, puuid: account.puuid, averageScoreDifference };
+      });
+
+      setAllMatchData(processedMatches);
 
     } catch (err) {
       console.error(err);
-      if (err.response && err.response.status === 404) {
-        setError('プレイヤーが見つかりませんでした。');
-      } else {
-        setError('データの取得に失敗しました。APIキーが有効か確認してください。');
-      }
+      setError(err.response?.status === 404 ? 'プレイヤーが見つかりませんでした。' : 'データの取得に失敗しました。APIキーが有効か確認してください。');
     } finally {
       setLoading(false);
     }
-  }, [fetchMatchesAndTimeline]);
+  }, [fetchFullMatchDetails]);
 
   const handleLoadMore = useCallback(async () => {
     setLoading(true);
+    const currentIdCount = allMatchIds.length;
+    const currentDataCount = allMatchData.length;
 
-    const localHasMore = allMatchIds.length > displayedMatchesCount;
-
-    if (localHasMore) {
-      const nextMatchIds = allMatchIds.slice(displayedMatchesCount, displayedMatchesCount + MATCH_COUNT_PER_PAGE);
-      try {
-        const newMatchesDetails = await fetchMatchesAndTimeline(nextMatchIds, searchedPuuid);
-        setMatchData(prevData => [...prevData, ...newMatchesDetails]);
-        setDisplayedMatchesCount(prevCount => prevCount + MATCH_COUNT_PER_PAGE);
-      } catch (err) {
-        console.error(err);
-        setError('追加の試合履歴の読み込みに失敗しました。');
-      } finally {
-        setLoading(false);
-      }
-    } else if (hasMoreMatches) {
-      try {
-        const newMatchIds = await getMatchIdsByPuuid(searchedPuuid, { start: apiMatchStart, count: MATCH_ID_COUNT_PER_API_CALL });
-        if (newMatchIds.length > 0) {
-          setAllMatchIds(prevIds => [...prevIds, ...newMatchIds]);
-          setApiMatchStart(prevStart => prevStart + MATCH_ID_COUNT_PER_API_CALL);
-          
-          const nextMatchIds = newMatchIds.slice(0, MATCH_COUNT_PER_PAGE);
-          const newMatchesDetails = await fetchMatchesAndTimeline(nextMatchIds, searchedPuuid);
-          setMatchData(prevData => [...prevData, ...newMatchesDetails]);
-          setDisplayedMatchesCount(prevCount => prevCount + MATCH_COUNT_PER_PAGE);
-        }
-
-        if (newMatchIds.length < MATCH_ID_COUNT_PER_API_CALL) {
+    try {
+      let newMatchIds = [];
+      if (currentDataCount < currentIdCount) {
+        // Load more from existing allMatchIds
+        newMatchIds = allMatchIds.slice(currentDataCount, currentDataCount + MATCH_COUNT_PER_PAGE);
+      } else if (hasMoreMatches) {
+        // Fetch new match IDs from API
+        const fetchedIds = await getMatchIdsByPuuid(searchedPuuid, { start: apiMatchStart, count: MATCH_ID_COUNT_PER_API_CALL });
+        if (fetchedIds.length < MATCH_ID_COUNT_PER_API_CALL) {
           setHasMoreMatches(false);
         }
-      } catch (err) {
-        console.error(err);
-        setError('追加の試合履歴の読み込みに失敗しました。');
-      } finally {
-        setLoading(false);
+        setAllMatchIds(prev => [...prev, ...fetchedIds]);
+        setApiMatchStart(prev => prev + MATCH_ID_COUNT_PER_API_CALL);
+        newMatchIds = fetchedIds.slice(0, MATCH_COUNT_PER_PAGE);
       }
+
+      if (newMatchIds.length > 0) {
+        const newMatchesDetails = await fetchFullMatchDetails(newMatchIds);
+        const processedMatches = newMatchesDetails.map(({ match, timeline }) => {
+            const mainP = match.info.participants.find(p => p.puuid === searchedPuuid);
+            const opp = mainP ? match.info.participants.find(p => p.teamId !== mainP.teamId && p.teamPosition === mainP.teamPosition) : null;
+            const { averageScoreDifference } = processTimelineData(timeline, mainP?.puuid, opp?.puuid);
+            return { match, timeline, puuid: searchedPuuid, averageScoreDifference };
+        });
+        setAllMatchData(prev => [...prev, ...processedMatches]);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('追加の試合履歴の読み込みに失敗しました。');
+    } finally {
+      setLoading(false);
     }
+  }, [apiMatchStart, hasMoreMatches, searchedPuuid, fetchFullMatchDetails, allMatchIds, allMatchData]);
 
-  }, [allMatchIds, displayedMatchesCount, apiMatchStart, hasMoreMatches, searchedPuuid, fetchMatchesAndTimeline]);
+  const selectedMatchData = useMemo(() => {
+    return allMatchData.find(m => m.match.metadata.matchId === selectedMatchId) || null;
+  }, [selectedMatchId, allMatchData]);
 
-  const handleSelectMatch = useCallback(async (matchId) => {
+  const handleSelectMatch = useCallback((matchId) => {
     if (selectedMatchId === matchId) {
       setSelectedMatchId(null);
       return;
     }
-    setSelectedMatchId(matchId);
-    // タイムラインデータは検索時にすでに処理・保存されているため、ここでは何もしない
-  }, [selectedMatchId]);
+    
+    const matchDataItem = allMatchData.find(m => m.match.metadata.matchId === matchId);
+    if (!matchDataItem) return;
 
-  const selectedMatchData = useMemo(() => {
-    return matchData.find(m => m.match.metadata.matchId === selectedMatchId) || null;
-  }, [selectedMatchId, matchData]);
+    const { match, timeline, puuid } = matchDataItem;
+    const initialPlayer = match.info.participants.find(p => p.puuid === puuid);
+    if (!initialPlayer) return;
+
+    const initialOpponent = match.info.participants.find(p => p.teamId !== initialPlayer.teamId && p.teamPosition === initialPlayer.teamPosition);
+    const initialRole = initialPlayer.teamPosition;
+
+    const { chartData, gameEvents } = processTimelineData(timeline, initialPlayer.puuid, initialOpponent?.puuid);
+
+    setMainPlayer(initialPlayer);
+    setOpponent(initialOpponent);
+    setChartData(chartData);
+    setGameEvents(gameEvents);
+    setSelectedRole(initialRole);
+    setSelectedMatchId(matchId);
+  }, [selectedMatchId, allMatchData]);
+
+  const handlePlayerSelect = useCallback((role) => {
+    if (!selectedMatchData) return;
+
+    const { match, timeline } = selectedMatchData;
+    const searchedPlayer = match.info.participants.find(p => p.puuid === searchedPuuid);
+    if (!searchedPlayer) return;
+
+    const newMainPlayer = match.info.participants.find(p => p.teamId === searchedPlayer.teamId && p.teamPosition === role) || searchedPlayer;
+    const newOpponent = match.info.participants.find(p => p.teamId !== newMainPlayer.teamId && p.teamPosition === newMainPlayer.teamPosition);
+
+    const { chartData, gameEvents } = processTimelineData(timeline, newMainPlayer.puuid, newOpponent?.puuid);
+
+    setMainPlayer(newMainPlayer);
+    setOpponent(newOpponent);
+    setChartData(chartData);
+    setGameEvents(gameEvents);
+    setSelectedRole(role);
+  }, [selectedMatchData, searchedPuuid]);
 
   return (
     <div className="bg-gray-900 text-slate-200 min-h-screen font-sans">
@@ -158,19 +189,27 @@ function App() {
       <main className="container mx-auto px-4 pb-10 flex flex-col items-center gap-8">
         <SearchForm onSearch={handleSearch} loading={loading} />
 
-        {loading && matchData.length === 0 && <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-400"></div>}
+        {loading && allMatchData.length === 0 && <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-400"></div>}
         {error && <p className="bg-red-900/50 text-red-300 border border-red-500 rounded-md px-4 py-2">{error}</p>}
 
         <MatchHistory
-          matches={matchData}
+          matches={allMatchData}
           onSelectMatch={handleSelectMatch}
           selectedMatchId={selectedMatchId}
           puuid={searchedPuuid}
+          // Props for MatchDetail
           selectedMatchData={selectedMatchData}
+          mainPlayer={mainPlayer}
+          opponent={opponent}
+          chartData={chartData}
+          gameEvents={gameEvents}
+          selectedRole={selectedRole}
+          onPlayerSelect={handlePlayerSelect}
+          onSearchPlayer={handleSearch}
+          // Props for loading more
           onLoadMore={handleLoadMore}
-          hasMore={hasMoreMatches || allMatchIds.length > displayedMatchesCount}
+          hasMore={hasMoreMatches || allMatchIds.length > allMatchData.length}
           loading={loading}
-          onPlayerSelect={handleSearch} // プレイヤー選択時の検索実行用
         />
       </main>
       <footer className="text-center text-xs text-slate-500 py-6 px-4 max-w-3xl mx-auto">

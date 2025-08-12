@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import ScoreChart from './ScoreChart';
-import { processTimelineData } from '../utils/scoreCalculator';
 import { getChampionImage } from '../utils/ddragon';
 import { getPlayerName } from '../utils/player';
 
@@ -19,66 +18,41 @@ const ROLES = {
     UTILITY: { label: 'SUP', icon: supportIcon }
 };
 
-const MatchDetail = ({ matchData, onPlayerSelect }) => {
-  const [selectedRole, setSelectedRole] = useState(null);
+const MatchDetail = ({
+  matchData,
+  mainPlayer,
+  opponent,
+  chartData,
+  gameEvents,
+  selectedRole,
+  onPlayerSelect, // For role switching
+  onSearchPlayer, // For searching a new player
+}) => {
 
-  const { match, timeline, puuid } = matchData;
+  const { roleMappings, userTeamId } = useMemo(() => {
+    if (!matchData) return { roleMappings: null, userTeamId: null };
 
-  const { roleMappings, initialRole, userTeamId } = useMemo(() => {
-    if (!match) return { roleMappings: null, initialRole: null, userTeamId: null };
-
+    const { match, puuid } = matchData;
     const mappings = {
       100: {},
       200: {}
     };
-    let userRole = null;
     const searchedPlayer = match.info.participants.find(p => p.puuid === puuid);
-    if (!searchedPlayer) return { roleMappings: null, initialRole: null, userTeamId: null };
+    if (!searchedPlayer) return { roleMappings: null, userTeamId: null };
 
-    const userTeamId = searchedPlayer.teamId;
+    const teamId = searchedPlayer.teamId;
 
     for (const p of match.info.participants) {
         const role = p.teamPosition;
         if (!role || !Object.keys(ROLES).includes(role)) continue;
-
         mappings[p.teamId][role] = p;
-
-        if (p.puuid === puuid) {
-            userRole = role;
-        }
     }
-    return { roleMappings: mappings, initialRole: userRole, userTeamId };
-  }, [match, puuid]);
+    return { roleMappings: mappings, userTeamId: teamId };
+  }, [matchData]);
 
-  useEffect(() => {
-    if (initialRole) {
-      setSelectedRole(initialRole);
-    }
-  }, [initialRole]);
-
-  const { mainPlayer, opponent, chartData, gameEvents } = useMemo(() => {
-    if (!selectedRole || !roleMappings || !timeline) {
-      return { mainPlayer: null, opponent: null, chartData: [], gameEvents: [] };
-    }
-
-    const opponentTeamId = userTeamId === 100 ? 200 : 100;
-
-    const mainP = roleMappings[userTeamId][selectedRole];
-    const opp = roleMappings[opponentTeamId][selectedRole];
-
-    if (!mainP || !opp) {
-      return { mainPlayer: mainP, opponent: opp, chartData: [], gameEvents: [] };
-    }
-
-    // App.jsxから渡された処理済みのタイムラインデータを使用
-    return {
-      mainPlayer: mainP,
-      opponent: opp,
-      chartData: timeline.chartData,
-      gameEvents: timeline.gameEvents,
-    };
-  }, [selectedRole, roleMappings, timeline, userTeamId]);
-
+  if (!matchData) {
+    return null; // or a loading/error state
+  }
 
   if (!roleMappings) {
     return (
@@ -97,10 +71,9 @@ const MatchDetail = ({ matchData, onPlayerSelect }) => {
         <div 
           className="flex items-center gap-3 w-48 cursor-pointer group"
           onClick={() => {
-            if (!mainPlayer || !onPlayerSelect) return;
+            if (!mainPlayer || !onSearchPlayer) return;
             const riotId = `${mainPlayer.riotIdGameName}#${mainPlayer.riotIdTagline}`;
-            console.log("Ally Clicked:", riotId); // For Debugging
-            onPlayerSelect(riotId);
+            onSearchPlayer(riotId);
           }}
           title={`「${mainPlayer ? getPlayerName(mainPlayer) : ''}」の対戦履歴を検索`}
         >
@@ -120,12 +93,18 @@ const MatchDetail = ({ matchData, onPlayerSelect }) => {
         <div className="flex justify-center items-center gap-4">
             {Object.entries(ROLES).map(([apiRole, roleInfo]) => {
                 const isActive = selectedRole === apiRole;
+                // Check if players exist for this role on both teams
+                const allyPlayer = roleMappings[userTeamId]?.[apiRole];
+                const enemyPlayer = roleMappings[userTeamId === 100 ? 200 : 100]?.[apiRole];
+                const isDisabled = !allyPlayer || !enemyPlayer;
+
                 return (
                     <button 
                         key={apiRole}
-                        onClick={() => setSelectedRole(apiRole)}
-                        title={roleInfo.label}
-                        className={`p-2 rounded-lg transition-all duration-200 border-2 ${isActive ? 'border-cyan-500 bg-gray-700' : 'border-transparent hover:bg-gray-700'}`}>
+                        onClick={() => onPlayerSelect(apiRole)}
+                        title={isDisabled ? `${roleInfo.label}のプレイヤーが見つかりません` : roleInfo.label}
+                        disabled={isDisabled}
+                        className={`p-2 rounded-lg transition-all duration-200 border-2 ${isActive ? 'border-cyan-500 bg-gray-700' : 'border-transparent hover:bg-gray-700'} ${isDisabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
                         <img 
                             src={roleInfo.icon}
                             alt={roleInfo.label}
@@ -140,10 +119,9 @@ const MatchDetail = ({ matchData, onPlayerSelect }) => {
         <div 
           className="flex items-center justify-end gap-3 w-48 cursor-pointer group"
           onClick={() => {
-            if (!opponent || !onPlayerSelect) return;
+            if (!opponent || !onSearchPlayer) return;
             const riotId = `${opponent.riotIdGameName}#${opponent.riotIdTagline}`;
-            console.log("Opponent Clicked:", riotId); // For Debugging
-            onPlayerSelect(riotId);
+            onSearchPlayer(riotId);
           }}
           title={`「${opponent ? getPlayerName(opponent) : ''}」の対戦履歴を検索`}
         >

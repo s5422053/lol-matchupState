@@ -218,6 +218,7 @@ const ScoreChart = ({
   const svgRef = useRef(null);
   const [hoverX, setHoverX] = useState(null);
   const [hoveredData, setHoveredData] = useState(null);
+  const [lockedData, setLockedData] = useState(null);
 
   const mainPlayerId = mainPlayer?.participantId;
   const opponentPlayerId = opponent?.participantId;
@@ -298,12 +299,32 @@ const ScoreChart = ({
     setHoveredData(null);
   };
 
+  const handleClick = (event) => {
+    if (!svgRef.current || chartData.length === 0) return;
+    const svgRect = svgRef.current.getBoundingClientRect();
+    const clickXInSvg = event.clientX - svgRect.left;
+    const viewBoxX = (clickXInSvg / svgRect.width) * SVG_WIDTH;
+
+    if (viewBoxX >= PADDING.left && viewBoxX <= SVG_WIDTH - PADDING.right) {
+      const clickXInChartArea = viewBoxX - PADDING.left;
+      const timeRatio = Math.max(0, Math.min(1, clickXInChartArea / CHART_WIDTH));
+      const timeAtClick = timeRatio * maxTime;
+
+      const closestPoint = chartData.reduce((prev, curr) =>
+        Math.abs(curr.time - timeAtClick) < Math.abs(prev.time - timeAtClick) ? curr : prev
+      );
+      setLockedData(closestPoint);
+    }
+  };
+
   const visibleEvents = useMemo(() => {
     return gameEvents.filter(event =>
       (showKillEvents && event.type === 'KILL') ||
       (showObjectEvents && event.type === 'OBJECTIVE')
     );
   }, [gameEvents, showKillEvents, showObjectEvents]);
+
+  const displayData = lockedData || hoveredData;
 
   return (
     <div className="w-full h-full flex flex-col justify-center items-center">
@@ -314,6 +335,7 @@ const ScoreChart = ({
           className="w-full h-auto cursor-pointer"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
+          onClick={handleClick}
         >
           <defs>
             <clipPath id="clip-above">
@@ -341,6 +363,17 @@ const ScoreChart = ({
             </g>
 
             <g className="events-layer">
+              {lockedData && (
+                <line
+                  x1={xScale(lockedData.time)}
+                  y1={0}
+                  x2={xScale(lockedData.time)}
+                  y2={CHART_HEIGHT}
+                  className="stroke-fuchsia-600"
+                  strokeWidth="2"
+                  pointerEvents="none"
+                />
+              )}
               {hoverX !== null && (
                 <line
                   x1={hoverX - PADDING.left}
@@ -370,34 +403,34 @@ const ScoreChart = ({
       </div>
 
       <div className="w-full max-w-5xl mt-1 p-4 bg-gray-900/50 rounded-lg text-slate-200 shadow-lg min-h-[300px]">
-        {hoveredData ? (
+        {displayData ? (
           <div className="flex gap-2 justify-center items-start">
-            {mainPlayer && hoveredData.mainPlayerStats && 
+            {mainPlayer && displayData.mainPlayerStats && 
                 <PlayerInfoColumn 
                     player={mainPlayer} 
-                    stats={hoveredData.mainPlayerStats} 
-                    totalScore={hoveredData.mainPlayerScore} 
+                    stats={displayData.mainPlayerStats} 
+                    totalScore={displayData.mainPlayerScore} 
                     isMainPlayer={true} 
                 />}
             
             {mainPlayer && opponent && 
                 <CenterColumn 
-                    time={hoveredData.time} 
-                    mainPlayerStats={hoveredData.mainPlayerStats} 
-                    opponentPlayerStats={hoveredData.opponentPlayerStats} 
+                    time={displayData.time} 
+                    mainPlayerStats={displayData.mainPlayerStats} 
+                    opponentPlayerStats={displayData.opponentPlayerStats} 
                 />}
 
-            {opponent && hoveredData.opponentPlayerStats && 
+            {opponent && displayData.opponentPlayerStats && 
                 <PlayerInfoColumn 
                     player={opponent} 
-                    stats={hoveredData.opponentPlayerStats} 
-                    totalScore={hoveredData.opponentPlayerScore} 
+                    stats={displayData.opponentPlayerStats} 
+                    totalScore={displayData.opponentPlayerScore} 
                     isMainPlayer={false} 
                 />}
           </div>
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-center text-slate-400">グラフにカーソルを合わせて、特定の時点での詳細データを表示します。</p>
+            <p className="text-center text-slate-400">グラフをクリックして、特定の時点での詳細データを表示します。</p>
           </div>
         )}
       </div>
