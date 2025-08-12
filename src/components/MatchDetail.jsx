@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import ScoreChart from './ScoreChart';
-import { processTimelineData } from '../utils/scoreCalculator';
 import { getChampionImage } from '../utils/ddragon';
 import { getPlayerName } from '../utils/player';
 
@@ -19,67 +18,43 @@ const ROLES = {
     UTILITY: { label: 'SUP', icon: supportIcon }
 };
 
-const MatchDetail = ({ matchData, onPlayerSelect }) => {
-  const [selectedRole, setSelectedRole] = useState(null);
+const MatchDetail = ({
+  matchData,
+  mainPlayer,
+  opponent,
+  chartData,
+  gameEvents,
+  selectedRole,
+  roleScoreDifferences,
+  onPlayerSelect, // For role switching
+  onSearchPlayer, // For searching a new player
+  isMobileView, // Add this
+}) => {
 
-  const { match, timeline, puuid } = matchData;
+  const { roleMappings, userTeamId } = useMemo(() => {
+    if (!matchData) return { roleMappings: null, userTeamId: null };
 
-  const { roleMappings, initialRole, userTeamId } = useMemo(() => {
-    if (!match) return { roleMappings: null, initialRole: null, userTeamId: null };
-
+    const { match, puuid } = matchData;
     const mappings = {
       100: {},
       200: {}
     };
-    let userRole = null;
     const searchedPlayer = match.info.participants.find(p => p.puuid === puuid);
-    if (!searchedPlayer) return { roleMappings: null, initialRole: null, userTeamId: null };
+    if (!searchedPlayer) return { roleMappings: null, userTeamId: null };
 
-    const userTeamId = searchedPlayer.teamId;
+    const teamId = searchedPlayer.teamId;
 
     for (const p of match.info.participants) {
         const role = p.teamPosition;
         if (!role || !Object.keys(ROLES).includes(role)) continue;
-
         mappings[p.teamId][role] = p;
-
-        if (p.puuid === puuid) {
-            userRole = role;
-        }
     }
-    return { roleMappings: mappings, initialRole: userRole, userTeamId };
-  }, [match, puuid]);
+    return { roleMappings: mappings, userTeamId: teamId };
+  }, [matchData]);
 
-  useEffect(() => {
-    if (initialRole) {
-      setSelectedRole(initialRole);
-    }
-  }, [initialRole]);
-
-  const { mainPlayer, opponent, chartData, gameEvents } = useMemo(() => {
-    if (!selectedRole || !roleMappings || !timeline || !userTeamId) {
-      return { mainPlayer: null, opponent: null, chartData: [], gameEvents: [] };
-    }
-
-    const opponentTeamId = userTeamId === 100 ? 200 : 100;
-
-    const mainP = roleMappings[userTeamId][selectedRole];
-    const opp = roleMappings[opponentTeamId][selectedRole];
-
-    if (!mainP || !opp) {
-      return { mainPlayer: mainP, opponent: opp, chartData: [], gameEvents: [] };
-    }
-
-    const { chartData: processedChartData, gameEvents: processedGameEvents } = processTimelineData(timeline, mainP.participantId, opp.participantId);
-
-    return {
-      mainPlayer: mainP,
-      opponent: opp,
-      chartData: processedChartData,
-      gameEvents: processedGameEvents,
-    };
-  }, [selectedRole, roleMappings, timeline, userTeamId]);
-
+  if (!matchData) {
+    return null; // or a loading/error state
+  }
 
   if (!roleMappings) {
     return (
@@ -90,75 +65,175 @@ const MatchDetail = ({ matchData, onPlayerSelect }) => {
   }
 
   return (
-    <div className="w-full max-w-5xl bg-gray-800 rounded-lg p-6 mt-2">
+    <div className="w-full max-w-5xl bg-gray-800 rounded-lg p-4 sm:p-6 mt-2">
       {/* ロール選択 & チャンピオンアイコン表示エリア */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 sm:gap-0">
         
-        {/* Ally Champion Icon & Text */}
-        <div 
-          className="flex items-center gap-3 w-48 cursor-pointer group"
-          onClick={() => {
-            if (!mainPlayer || !onPlayerSelect) return;
-            const riotId = `${mainPlayer.riotIdGameName}#${mainPlayer.riotIdTagline}`;
-            console.log("Ally Clicked:", riotId); // For Debugging
-            onPlayerSelect(riotId);
-          }}
-          title={`「${mainPlayer ? getPlayerName(mainPlayer) : ''}」の対戦履歴を検索`}
-        >
-          {mainPlayer && (
-              <>
-                  <img
-                      src={getChampionImage(mainPlayer.championName)}
-                      alt={mainPlayer.championName}
-                      className="w-16 h-16 rounded-full border-4 border-blue-500 shadow-lg transition-transform duration-200 group-hover:scale-110"
-                  />
-                  <p className="text-lg font-bold text-blue-400">味方チーム</p>
-              </>
-          )}
-        </div>
+        {isMobileView ? (
+          <>
+            {/* ロール切り替えボタン */}
+            <div className="flex flex-wrap justify-center items-center gap-1 sm:gap-4">
+                {Object.entries(ROLES).map(([apiRole, roleInfo]) => {
+                    const isActive = selectedRole === apiRole;
+                    const allyPlayer = roleMappings[userTeamId]?.[apiRole];
+                    const enemyPlayer = roleMappings[userTeamId === 100 ? 200 : 100]?.[apiRole];
+                    const isDisabled = !allyPlayer || !enemyPlayer;
 
-        {/* ロール切り替えボタン */}
-        <div className="flex justify-center items-center gap-4">
-            {Object.entries(ROLES).map(([apiRole, roleInfo]) => {
-                const isActive = selectedRole === apiRole;
-                return (
-                    <button 
-                        key={apiRole}
-                        onClick={() => setSelectedRole(apiRole)}
-                        title={roleInfo.label}
-                        className={`p-2 rounded-lg transition-all duration-200 border-2 ${isActive ? 'border-cyan-500 bg-gray-700' : 'border-transparent hover:bg-gray-700'}`}>
-                        <img 
-                            src={roleInfo.icon}
-                            alt={roleInfo.label}
-                            className={`w-10 h-10 transition-all duration-200 ${isActive ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                    const score = roleScoreDifferences[apiRole];
+                    const scoreColor = score > 0 ? 'text-blue-400' : score < 0 ? 'text-red-400' : 'text-slate-400';
+                    const scoreSign = score > 0 ? '+' : '';
+
+                    return (
+                        <div key={apiRole} className="flex flex-col items-center gap-1 w-12">
+                            <button
+                                onClick={() => onPlayerSelect(apiRole)}
+                                title={isDisabled ? `${roleInfo.label}のプレイヤーが見つかりません` : roleInfo.label}
+                                disabled={isDisabled}
+                                className={`p-2 rounded-lg transition-all duration-200 border-2 ${isActive ? 'border-cyan-500 bg-gray-700' : 'border-transparent hover:bg-gray-700'} ${isDisabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                                <img
+                                    src={roleInfo.icon}
+                                    alt={roleInfo.label}
+                                    className={`w-8 h-8 transition-all duration-200 ${isActive ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                                />
+                            </button>
+                            {score !== null && typeof score !== 'undefined' && (
+                                <p className={`text-xs font-bold ${scoreColor}`}>
+                                    {scoreSign}{score.toLocaleString()}
+                                </p>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="flex flex-row justify-between items-center w-full">
+              {/* Ally Champion Icon & Text */}
+              <div
+                className="flex items-center gap-3 cursor-pointer group justify-center flex-1"
+                onClick={() => {
+                  if (!mainPlayer || !onSearchPlayer) return;
+                  const riotId = `${mainPlayer.riotIdGameName}#${mainPlayer.riotIdTagline}`;
+                  onSearchPlayer(riotId);
+                }}
+                title={`「${mainPlayer ? getPlayerName(mainPlayer) : ''}」の対戦履歴を検索`}
+              >
+                {mainPlayer && (
+                    <>
+                        <img
+                            src={getChampionImage(mainPlayer.championName)}
+                            alt={mainPlayer.championName}
+                            className="w-16 h-16 rounded-full border-4 border-blue-500 shadow-lg transition-transform duration-200 group-hover:scale-110"
                         />
-                    </button>
-                )
-            })}
-        </div>
+                        <p className="text-lg font-bold text-blue-400">味方チーム</p>
+                    </>
+                )}
+              </div>
 
-        {/* Opponent Champion Icon & Text */}
-        <div 
-          className="flex items-center justify-end gap-3 w-48 cursor-pointer group"
-          onClick={() => {
-            if (!opponent || !onPlayerSelect) return;
-            const riotId = `${opponent.riotIdGameName}#${opponent.riotIdTagline}`;
-            console.log("Opponent Clicked:", riotId); // For Debugging
-            onPlayerSelect(riotId);
-          }}
-          title={`「${opponent ? getPlayerName(opponent) : ''}」の対戦履歴を検索`}
-        >
-            {opponent && (
-                <>
-                    <p className="text-lg font-bold text-red-400">敵チーム</p>
-                    <img
-                        src={getChampionImage(opponent.championName)}
-                        alt={opponent.championName}
-                        className="w-16 h-16 rounded-full border-4 border-red-500 shadow-lg transition-transform duration-200 group-hover:scale-110"
-                    />
-                </>
-            )}
-        </div>
+              {/* Opponent Champion Icon & Text */}
+              <div
+                className="flex items-center gap-3 cursor-pointer group justify-center flex-1"
+                onClick={() => {
+                  if (!opponent || !onSearchPlayer) return;
+                  const riotId = `${opponent.riotIdGameName}#${opponent.riotIdTagline}`;
+                  onSearchPlayer(riotId);
+                }}
+                title={`「${opponent ? getPlayerName(opponent) : ''}」の対戦履歴を検索`}
+              >
+                  {opponent && (
+                      <>
+                          <p className="text-lg font-bold text-red-400">敵チーム</p>
+                          <img
+                              src={getChampionImage(opponent.championName)}
+                              alt={opponent.championName}
+                              className="w-16 h-16 rounded-full border-4 border-red-500 shadow-lg transition-transform duration-200 group-hover:scale-110"
+                          />
+                      </>
+                  )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Ally Champion Icon & Text */}
+            <div
+              className="flex items-center gap-3 w-full sm:w-48 cursor-pointer group justify-center sm:justify-start"
+              onClick={() => {
+                if (!mainPlayer || !onSearchPlayer) return;
+                const riotId = `${mainPlayer.riotIdGameName}#${mainPlayer.riotIdTagline}`;
+                onSearchPlayer(riotId);
+              }}
+              title={`「${mainPlayer ? getPlayerName(mainPlayer) : ''}」の対戦履歴を検索`}
+            >
+              {mainPlayer && (
+                  <>
+                      <img
+                          src={getChampionImage(mainPlayer.championName)}
+                          alt={mainPlayer.championName}
+                          className="w-16 h-16 rounded-full border-4 border-blue-500 shadow-lg transition-transform duration-200 group-hover:scale-110"
+                      />
+                      <p className="text-lg font-bold text-blue-400">味方チーム</p>
+                  </>
+              )}
+            </div>
+
+            {/* ロール切り替えボタン */}
+            <div className="flex flex-wrap justify-center items-center gap-1 sm:gap-4">
+                {Object.entries(ROLES).map(([apiRole, roleInfo]) => {
+                    const isActive = selectedRole === apiRole;
+                    const allyPlayer = roleMappings[userTeamId]?.[apiRole];
+                    const enemyPlayer = roleMappings[userTeamId === 100 ? 200 : 100]?.[apiRole];
+                    const isDisabled = !allyPlayer || !enemyPlayer;
+
+                    const score = roleScoreDifferences[apiRole];
+                    const scoreColor = score > 0 ? 'text-blue-400' : score < 0 ? 'text-red-400' : 'text-slate-400';
+                    const scoreSign = score > 0 ? '+' : '';
+
+                    return (
+                        <div key={apiRole} className="flex flex-col items-center gap-1 w-12">
+                            <button
+                                onClick={() => onPlayerSelect(apiRole)}
+                                title={isDisabled ? `${roleInfo.label}のプレイヤーが見つかりません` : roleInfo.label}
+                                disabled={isDisabled}
+                                className={`p-2 rounded-lg transition-all duration-200 border-2 ${isActive ? 'border-cyan-500 bg-gray-700' : 'border-transparent hover:bg-gray-700'} ${isDisabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                                <img
+                                    src={roleInfo.icon}
+                                    alt={roleInfo.label}
+                                    className={`w-8 h-8 transition-all duration-200 ${isActive ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                                />
+                            </button>
+                            {score !== null && typeof score !== 'undefined' && (
+                                <p className={`text-xs font-bold ${scoreColor}`}>
+                                    {scoreSign}{score.toLocaleString()}
+                                </p>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Opponent Champion Icon & Text */}
+            <div
+              className="flex items-center justify-end gap-3 w-full sm:w-48 cursor-pointer group justify-center sm:justify-end"
+              onClick={() => {
+                if (!opponent || !onSearchPlayer) return;
+                const riotId = `${opponent.riotIdGameName}#${opponent.riotIdTagline}`;
+                onSearchPlayer(riotId);
+              }}
+              title={`「${opponent ? getPlayerName(opponent) : ''}」の対戦履歴を検索`}
+            >
+                {opponent && (
+                    <>
+                        <p className="text-lg font-bold text-red-400">敵チーム</p>
+                        <img
+                            src={getChampionImage(opponent.championName)}
+                            alt={opponent.championName}
+                            className="w-16 h-16 rounded-full border-4 border-red-500 shadow-lg transition-transform duration-200 group-hover:scale-110"
+                        />
+                    </>
+                )}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="relative">
@@ -172,6 +247,7 @@ const MatchDetail = ({ matchData, onPlayerSelect }) => {
                 opponentPlayerColor={'#ef4444'} // red-500
                 mainPlayer={mainPlayer}
                 opponent={opponent}
+                isMobileView={isMobileView} // Pass it here
             />
         ) : (
             <div className="w-full h-[650px] flex items-center justify-center">

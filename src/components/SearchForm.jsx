@@ -11,7 +11,7 @@ const SearchForm = ({ onSearch, loading }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 w-full max-w-md">
+    <form onSubmit={handleSubmit} className="flex gap-2 w-full sm:max-w-md">
       <input
         type="text"
         value={riotId}
