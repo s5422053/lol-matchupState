@@ -228,6 +228,7 @@ const ScoreChart = ({
   const [hoveredData, setHoveredData] = useState(null);
   const [lockedData, setLockedData] = useState(null);
   const [showRawValueDiff, setShowRawValueDiff] = useState(false);
+  const [simpleTooltipPos, setSimpleTooltipPos] = useState({ x: 0, y: 0, visible: false, time: 0, scoreDiff: 0 });
 
   const mainPlayerId = mainPlayer?.participantId;
   const opponentPlayerId = opponent?.participantId;
@@ -301,15 +302,29 @@ const ScoreChart = ({
       );
       setHoveredData(closestPoint);
 
+      // Update simpleTooltipPos
+      if (!isMobileView) { // Only show on PC
+        const tooltipY = event.clientY - svgRect.top + 10; // Offset from mouse Y
+        setSimpleTooltipPos({
+          x: viewBoxX,
+          y: tooltipY,
+          visible: true,
+          time: closestPoint.time,
+          scoreDiff: closestPoint.scoreDifference,
+        });
+      }
+
     } else {
       setHoverX(null);
       setHoveredData(null);
+      setSimpleTooltipPos({ ...simpleTooltipPos, visible: false }); // Hide tooltip
     }
   };
 
   const handleMouseLeave = () => {
     setHoverX(null);
     setHoveredData(null);
+    setSimpleTooltipPos({ ...simpleTooltipPos, visible: false }); // Hide tooltip
   };
 
   const handleClick = (event) => {
@@ -415,6 +430,21 @@ const ScoreChart = ({
             </g>
           </g>
         </svg>
+
+        {/* Simple Tooltip */}
+        {simpleTooltipPos.visible && !isMobileView && (
+          <div
+            className="absolute bg-gray-700 text-white text-xs px-2 py-1 rounded shadow-md pointer-events-none w-28"
+            style={{
+              left: simpleTooltipPos.x,
+              top: simpleTooltipPos.y,
+              transform: 'translate(-50%, -100%)', // Center horizontally, move above cursor
+            }}
+          >
+            <p className="whitespace-nowrap">時間: {Math.floor(simpleTooltipPos.time)}:{Math.round((simpleTooltipPos.time % 1) * 60).toString().padStart(2, '0')}</p>
+            <p className="whitespace-nowrap">スコア差: {simpleTooltipPos.scoreDiff.toLocaleString()}</p>
+          </div>
+        )}
       </div>
 
       <div className="w-full max-w-5xl mt-1 p-2 sm:p-4 bg-gray-900/50 rounded-lg text-slate-200 shadow-lg min-h-[300px]">
