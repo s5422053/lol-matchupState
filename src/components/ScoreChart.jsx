@@ -165,8 +165,8 @@ const PlayerInfoColumn = ({ player, stats, totalScore, isMainPlayer }) => {
     );
 };
 
-const CenterColumn = ({ time, mainPlayerStats, opponentPlayerStats }) => (
-    <div className="flex-shrink-0 w-15">
+const CenterColumn = ({ time, mainPlayerStats, opponentPlayerStats, showRawValueDiff, onToggleView }) => (
+    <div className="flex-shrink-0 w-15 cursor-pointer group" onClick={onToggleView}>
         {/* Header */}
         <div className="text-center mb-2 h-[60px] flex flex-col justify-end">
             <p className="text-xs text-slate-400">タイムスタンプ</p>
@@ -179,14 +179,20 @@ const CenterColumn = ({ time, mainPlayerStats, opponentPlayerStats }) => (
             <table className="w-full border-collapse">
                 <thead>
                     <tr className="border-b border-gray-600">
-                        <th className="py-2 px-3 text-slate-400 font-semibold text-center">スコア差</th>
+                        <th className="py-2 px-3 text-slate-400 font-semibold text-center group-hover:text-cyan-400 transition-colors">
+                            {showRawValueDiff ? '元値差' : 'スコア差'}
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     {Object.keys(STAT_LABELS).map(key => {
-                        const mainValue = mainPlayerStats[key]?.weighted || 0;
-                        const oppValue = opponentPlayerStats[key]?.weighted || 0;
-                        const diff = mainValue - oppValue;
+                        const mainValue = mainPlayerStats[key] || { raw: 0, weighted: 0 };
+                        const oppValue = opponentPlayerStats[key] || { raw: 0, weighted: 0 };
+                        
+                        const diff = showRawValueDiff 
+                            ? mainValue.raw - oppValue.raw
+                            : mainValue.weighted - oppValue.weighted;
+
                         const color = diff >= 0 ? 'text-cyan-400' : 'text-red-400';
                         const sign = diff >= 0 ? '+' : '';
 
@@ -219,9 +225,14 @@ const ScoreChart = ({
   const [hoverX, setHoverX] = useState(null);
   const [hoveredData, setHoveredData] = useState(null);
   const [lockedData, setLockedData] = useState(null);
+  const [showRawValueDiff, setShowRawValueDiff] = useState(false);
 
   const mainPlayerId = mainPlayer?.participantId;
   const opponentPlayerId = opponent?.participantId;
+
+  const handleToggleDiffView = () => {
+    setShowRawValueDiff(prev => !prev);
+  };
 
   const { xScale, yScale, linePath, areaPath, yTicks, xTicks, maxTime } = useMemo(() => {
     if (!chartData || chartData.length === 0) {
@@ -418,6 +429,8 @@ const ScoreChart = ({
                     time={displayData.time} 
                     mainPlayerStats={displayData.mainPlayerStats} 
                     opponentPlayerStats={displayData.opponentPlayerStats} 
+                    showRawValueDiff={showRawValueDiff}
+                    onToggleView={handleToggleDiffView}
                 />}
 
             {opponent && displayData.opponentPlayerStats && 
