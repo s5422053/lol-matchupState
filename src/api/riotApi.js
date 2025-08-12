@@ -1,52 +1,62 @@
 import axios from 'axios';
 
-// Netlify Functionのエンドポイント
-const NETLIFY_FUNCTION_URL = '/.netlify/functions/riotApi';
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Riot APIのリージョン設定
 const CONTINENTAL_REGION = 'asia';
-
-// 各APIのベースURL
-const ACCOUNT_V1_BASE_URL = `https://${CONTINENTAL_REGION}.api.riotgames.com/riot/account/v1/accounts`;
-const MATCH_V5_BASE_URL = `https://${CONTINENTAL_REGION}.api.riotgames.com/lol/match/v5/matches`;
+const ACCOUNT_V1_RIOT_URL = `https://${CONTINENTAL_REGION}.api.riotgames.com/riot/account/v1/accounts`;
+const MATCH_V5_RIOT_URL = `https://${CONTINENTAL_REGION}.api.riotgames.com/lol/match/v5/matches`;
 
 /**
- * Netlify Functionを介してRiot APIにリクエストを送信する共通関数
- * @param {string} requestUrl - 実際にリクエストするRiot APIの完全なURL
+ * 環境に応じたAPIリクエストを送信する共通関数
+ * @param {string} requestUrl - 実際にリクエストする完全なURL（本番環境）またはプロキシ用のパス（開発環境）
  * @returns {Promise<object>} APIからのレスポンスデータ
  */
-const fetchFromRiotApi = async (requestUrl) => {
+const fetchFromApi = async (requestUrl) => {
   try {
-    const response = await axios.get(NETLIFY_FUNCTION_URL, {
-      params: {
-        url: requestUrl // クエリパラメータとして実際のURLを渡す
-      }
-    });
+    let response;
+    if (isDevelopment) {
+      // 開発環境：Viteプロキシを介してリクエスト
+      // requestUrlは /riot/... や /lol/... で始まるパス
+      response = await axios.get(`/api${requestUrl}`);
+    } else {
+      // 本番環境：Netlify Functionに完全なURLを渡す
+      response = await axios.get('/.netlify/functions/riotApi', {
+        params: { url: requestUrl }
+      });
+    }
     return response.data;
   } catch (error) {
-    console.error('Error fetching from Netlify function:', error.response?.data || error.message);
-    // エラーオブジェクトをそのままスローして、呼び出し元で処理できるようにする
-    throw error.response?.data || new Error('Netlify Function request failed');
+    console.error(`Error fetching from ${requestUrl}:`, error.response?.data || error.message);
+    throw error.response?.data || new Error('API request failed');
   }
 };
 
 export const getAccountByRiotId = async (gameName, tagLine) => {
-  const url = `${ACCOUNT_V1_BASE_URL}/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
-  return fetchFromRiotApi(url);
+  const endpoint = isDevelopment
+    ? `/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`
+    : `${ACCOUNT_V1_RIOT_URL}/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
+  return fetchFromApi(endpoint);
 };
 
 export const getMatchIdsByPuuid = async (puuid, params) => {
   const queryString = new URLSearchParams(params).toString();
-  const url = `${MATCH_V5_BASE_URL}/by-puuid/${puuid}/ids?${queryString}`;
-  return fetchFromRiotApi(url);
+  const endpoint = isDevelopment
+    ? `/lol/match/v5/matches/by-puuid/${puuid}/ids?${queryString}`
+    : `${MATCH_V5_RIOT_URL}/by-puuid/${puuid}/ids?${queryString}`;
+  return fetchFromApi(endpoint);
 };
 
 export const getMatchDetails = async (matchId) => {
-  const url = `${MATCH_V5_BASE_URL}/${matchId}`;
-  return fetchFromRiotApi(url);
+  const endpoint = isDevelopment 
+    ? `/lol/match/v5/matches/${matchId}`
+    : `${MATCH_V5_RIOT_URL}/${matchId}`;
+  return fetchFromApi(endpoint);
 };
 
 export const getMatchTimeline = async (matchId) => {
-  const url = `${MATCH_V5_BASE_URL}/${matchId}/timeline`;
-  return fetchFromRiotApi(url);
+  const endpoint = isDevelopment
+    ? `/lol/match/v5/matches/${matchId}/timeline`
+    : `${MATCH_V5_RIOT_URL}/${matchId}/timeline`;
+  return fetchFromApi(endpoint);
 };

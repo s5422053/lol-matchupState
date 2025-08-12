@@ -2,8 +2,9 @@ import React, { useState, useMemo, useCallback } from 'react';
 import SearchForm from './components/SearchForm';
 import MatchHistory from './components/MatchHistory';
 import { getAccountByRiotId, getMatchIdsByPuuid, getMatchDetails, getMatchTimeline } from './api/riotApi';
+import { processTimelineData } from './utils/scoreCalculator';
 
-const MATCH_COUNT_PER_PAGE = 10;
+const MATCH_COUNT_PER_PAGE = 5; // 初期読み込み数を5に変更
 const MATCH_ID_COUNT_PER_API_CALL = 100;
 
 function App() {
@@ -11,18 +12,34 @@ function App() {
   const [allMatchIds, setAllMatchIds] = useState([]);
   const [displayedMatchesCount, setDisplayedMatchesCount] = useState(MATCH_COUNT_PER_PAGE);
   const [apiMatchStart, setApiMatchStart] = useState(0);
-  const [hasMoreMatches, setHasMoreMatches] = useState(true); // API含め、まだ続きがあるか
+  const [hasMoreMatches, setHasMoreMatches] = useState(true);
 
   const [selectedMatchId, setSelectedMatchId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchedPuuid, setSearchedPuuid] = useState(null);
 
-  const fetchMatchDetails = useCallback(async (matchIds, puuid) => {
+  const fetchMatchesAndTimeline = useCallback(async (matchIds, puuid) => {
     return Promise.all(
       matchIds.map(async (matchId) => {
         const match = await getMatchDetails(matchId);
-        return { match, puuid };
+        const timeline = await getMatchTimeline(matchId);
+
+        const mainPlayer = match.info.participants.find(p => p.puuid === puuid);
+        const opponent = mainPlayer ? match.info.participants.find(p => 
+            p.teamId !== mainPlayer.teamId && p.teamPosition === mainPlayer.teamPosition
+        ) : null;
+
+        let averageScoreDifference = 0;
+        let processedTimeline = { chartData: [], gameEvents: [] };
+
+        if (mainPlayer && opponent && timeline) {
+            const { averageScoreDifference: avgDiff, ...rest } = processTimelineData(timeline, mainPlayer.puuid, opponent.puuid);
+            averageScoreDifference = avgDiff;
+            processedTimeline = rest; // chartData and gameEvents
+        }
+
+        return { match, timeline: processedTimeline, puuid, averageScoreDifference };
       })
     );
   }, []);
@@ -61,7 +78,7 @@ function App() {
       }
 
       const initialMatchIds = matchIds.slice(0, MATCH_COUNT_PER_PAGE);
-      const matchesDetails = await fetchMatchDetails(initialMatchIds, account.puuid);
+      const matchesDetails = await fetchMatchesAndTimeline(initialMatchIds, account.puuid);
       setMatchData(matchesDetails);
 
     } catch (err) {
@@ -74,7 +91,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [fetchMatchDetails]);
+  }, [fetchMatchesAndTimeline]);
 
   const handleLoadMore = useCallback(async () => {
     setLoading(true);
@@ -82,10 +99,9 @@ function App() {
     const localHasMore = allMatchIds.length > displayedMatchesCount;
 
     if (localHasMore) {
-      // ローカルに未表示の試合IDがある場合
       const nextMatchIds = allMatchIds.slice(displayedMatchesCount, displayedMatchesCount + MATCH_COUNT_PER_PAGE);
       try {
-        const newMatchesDetails = await fetchMatchDetails(nextMatchIds, searchedPuuid);
+        const newMatchesDetails = await fetchMatchesAndTimeline(nextMatchIds, searchedPuuid);
         setMatchData(prevData => [...prevData, ...newMatchesDetails]);
         setDisplayedMatchesCount(prevCount => prevCount + MATCH_COUNT_PER_PAGE);
       } catch (err) {
@@ -95,7 +111,6 @@ function App() {
         setLoading(false);
       }
     } else if (hasMoreMatches) {
-      // APIから追加で試合IDを取得する必要がある場合
       try {
         const newMatchIds = await getMatchIdsByPuuid(searchedPuuid, { start: apiMatchStart, count: MATCH_ID_COUNT_PER_API_CALL });
         if (newMatchIds.length > 0) {
@@ -103,7 +118,7 @@ function App() {
           setApiMatchStart(prevStart => prevStart + MATCH_ID_COUNT_PER_API_CALL);
           
           const nextMatchIds = newMatchIds.slice(0, MATCH_COUNT_PER_PAGE);
-          const newMatchesDetails = await fetchMatchDetails(nextMatchIds, searchedPuuid);
+          const newMatchesDetails = await fetchMatchesAndTimeline(nextMatchIds, searchedPuuid);
           setMatchData(prevData => [...prevData, ...newMatchesDetails]);
           setDisplayedMatchesCount(prevCount => prevCount + MATCH_COUNT_PER_PAGE);
         }
@@ -119,33 +134,16 @@ function App() {
       }
     }
 
-  }, [allMatchIds, displayedMatchesCount, apiMatchStart, hasMoreMatches, searchedPuuid, fetchMatchDetails]);
+  }, [allMatchIds, displayedMatchesCount, apiMatchStart, hasMoreMatches, searchedPuuid, fetchMatchesAndTimeline]);
 
   const handleSelectMatch = useCallback(async (matchId) => {
     if (selectedMatchId === matchId) {
       setSelectedMatchId(null);
       return;
     }
-
     setSelectedMatchId(matchId);
-    const targetMatchIndex = matchData.findIndex(m => m.match.metadata.matchId === matchId);
-    if (targetMatchIndex !== -1 && !matchData[targetMatchIndex].timeline) {
-      try {
-        setLoading(true);
-        const timeline = await getMatchTimeline(matchId);
-        setMatchData(prevData => {
-          const newData = [...prevData];
-          newData[targetMatchIndex] = { ...newData[targetMatchIndex], timeline };
-          return newData;
-        });
-      } catch (err) {
-        console.error("Failed to fetch timeline:", err);
-        setError("試合のタイムラインデータの取得に失敗しました。");
-      } finally {
-        setLoading(false);
-      }
-    }
-  }, [selectedMatchId, matchData]);
+    // タイムラインデータは検索時にすでに処理・保存されているため、ここでは何もしない
+  }, [selectedMatchId]);
 
   const selectedMatchData = useMemo(() => {
     return matchData.find(m => m.match.metadata.matchId === selectedMatchId) || null;

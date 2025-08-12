@@ -57,7 +57,7 @@ const MatchDetail = ({ matchData, onPlayerSelect }) => {
   }, [initialRole]);
 
   const { mainPlayer, opponent, chartData, gameEvents } = useMemo(() => {
-    if (!selectedRole || !roleMappings || !timeline || !userTeamId) {
+    if (!selectedRole || !roleMappings || !timeline) {
       return { mainPlayer: null, opponent: null, chartData: [], gameEvents: [] };
     }
 
@@ -70,13 +70,12 @@ const MatchDetail = ({ matchData, onPlayerSelect }) => {
       return { mainPlayer: mainP, opponent: opp, chartData: [], gameEvents: [] };
     }
 
-    const { chartData: processedChartData, gameEvents: processedGameEvents } = processTimelineData(timeline, mainP.participantId, opp.participantId);
-
+    // App.jsxから渡された処理済みのタイムラインデータを使用
     return {
       mainPlayer: mainP,
       opponent: opp,
-      chartData: processedChartData,
-      gameEvents: processedGameEvents,
+      chartData: timeline.chartData,
+      gameEvents: timeline.gameEvents,
     };
   }, [selectedRole, roleMappings, timeline, userTeamId]);
 

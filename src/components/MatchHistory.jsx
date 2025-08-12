@@ -9,7 +9,7 @@ const formatDuration = (seconds) => {
 };
 
 const PlayerInfo = ({ player }) => (
-  <div className="flex items-center gap-3">
+  <div className="w-36 flex items-center gap-3">
     <img
       src={getChampionImage(player.championName)}
       alt={player.championName}
@@ -30,7 +30,6 @@ const MatchSummary = ({ matchData, onSelectMatch, selectedMatchId, puuid }) => {
 
   if (!mainPlayer) return null; // 検索したプレイヤーが試合にいない場合はスキップ
 
-  // ARAMや特殊モードを考慮し、teamPositionがない場合は対面を探さない
   const opponent = mainPlayer.teamPosition ? info.participants.find(p =>
     p.teamId !== mainPlayer.teamId && p.teamPosition === mainPlayer.teamPosition
   ) : null;
@@ -42,6 +41,10 @@ const MatchSummary = ({ matchData, onSelectMatch, selectedMatchId, puuid }) => {
   const selectedClass = isSelected
     ? '!border-cyan-400 scale-105 shadow-lg shadow-cyan-500/10'
     : 'hover:bg-gray-700/50';
+
+  const averageScoreDifference = matchData.averageScoreDifference || 0;
+  const scoreDiffColor = averageScoreDifference > 0 ? 'text-blue-400' : averageScoreDifference < 0 ? 'text-red-400' : 'text-slate-400';
+  const scoreDiffSign = averageScoreDifference > 0 ? '+' : '';
 
   return (
     <div
@@ -59,12 +62,19 @@ const MatchSummary = ({ matchData, onSelectMatch, selectedMatchId, puuid }) => {
         <PlayerInfo player={mainPlayer} />
       </div>
 
+      {/* 平均スコア差 */}
+      <div className="text-center">
+        <p className="text-xs text-slate-500">平均スコア差</p>
+        <p className={`text-lg font-bold ${scoreDiffColor}`}>
+          {scoreDiffSign}{averageScoreDifference.toLocaleString()}
+        </p>
+      </div>
+
       <div className="flex items-center gap-4">
-        <p className="text-sm font-bold text-slate-500">VS</p>
         {opponent ? (
           <PlayerInfo player={opponent} />
         ) : (
-          <div className="w-48 text-center text-slate-500 text-sm">対面なし</div>
+          <div className="w-36 text-center text-slate-500 text-sm">対面なし</div>
         )}
       </div>
     </div>

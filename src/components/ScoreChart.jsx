@@ -329,6 +329,7 @@ const ScoreChart = ({
           <g transform={`translate(${PADDING.left}, ${PADDING.top})`}>
             <AxesAndGrid xScale={xScale} yScale={yScale} yTicks={yTicks} xTicks={xTicks} />
 
+            {/* 有利エリアと線 (青) */}
             <g clipPath="url(#clip-above)">
               <path d={areaPath} fill="#3b82f6" fillOpacity="0.1" />
               <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth="2" />

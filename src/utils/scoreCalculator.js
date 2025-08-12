@@ -1,7 +1,3 @@
-/**
- * スコア計算のための重み付け
- * score_calc.txtの内容に基づいています。
- */
 const SCORE_WEIGHTS = {
   totalGold: 1,
   kills: 300,
@@ -15,61 +11,39 @@ const SCORE_WEIGHTS = {
   eliteMonsterKill: 500,
 };
 
-/**
- * タイムラインデータから、両プレイヤーのスコアとゲームイベントを抽出・計算します。
- * @param {object} timeline - Riot APIから取得した試合のタイムラインデータ
- * @param {number} mainPlayerId - 自身のparticipantId
- * @param {number} opponentPlayerId - 対面のparticipantId
- * @returns {{chartData: object[], gameEvents: object[]}} チャート描画用のデータとゲームイベントの配列
- */
-export function processTimelineData(timeline, mainPlayerId, opponentPlayerId) {
+export function processTimelineData(timeline, mainPlayerPuuid, opponentPuuid) {
   const chartData = [];
   const gameEvents = [];
+  const scoreDifferences = [];
 
-  // イベントによるスコアはフレームデータに含まれないため、別途集計します。
-  const mainPlayerEventScores = {
-    kills: 0,
-    deaths: 0,
-    assists: 0,
-    wardsPlaced: 0,
-    wardsKilled: 0,
-    buildingKill: 0,
-    eliteMonsterKill: 0,
-  };
-  const opponentPlayerEventScores = { ...mainPlayerEventScores };
-
-  // 最初のフレーム（0分時点）のデータを追加
-  const initialMainPlayerFrame = timeline.info.frames[0]?.participantFrames[mainPlayerId];
-  const initialOpponentPlayerFrame = timeline.info.frames[0]?.participantFrames[opponentPlayerId];
-
-  if (initialMainPlayerFrame && initialOpponentPlayerFrame) {
-    // 0分時点ではイベントスコアは全て0
-    const mainPlayerInitialStats = calculateFrameStats(initialMainPlayerFrame, mainPlayerEventScores);
-    const opponentPlayerInitialStats = calculateFrameStats(initialOpponentPlayerFrame, opponentPlayerEventScores);
-    chartData.push({
-      time: 0,
-      scoreDifference: 0,
-      mainPlayerScore: Object.values(mainPlayerInitialStats).reduce((a, b) => a + b, 0),
-      opponentPlayerScore: Object.values(opponentPlayerInitialStats).reduce((a, b) => a + b, 0),
-      mainPlayerStats: mainPlayerInitialStats,
-      opponentPlayerStats: opponentPlayerInitialStats,
-    });
+  if (!timeline || !timeline.info || !timeline.info.frames || !timeline.info.participants) {
+    return { chartData, gameEvents, averageScoreDifference: 0 };
   }
 
-  // 各フレーム（1分ごと）をループしてデータを処理
+  const mainPlayerTimelineParticipant = timeline.info.participants.find(p => p.puuid === mainPlayerPuuid);
+  const opponentTimelineParticipant = timeline.info.participants.find(p => p.puuid === opponentPuuid);
+
+  if (!mainPlayerTimelineParticipant || !opponentTimelineParticipant) {
+    return { chartData, gameEvents, averageScoreDifference: 0 };
+  }
+
+  const mainPlayerId = mainPlayerTimelineParticipant.participantId;
+  const opponentPlayerId = opponentTimelineParticipant.participantId;
+
+  const mainPlayerEventScores = { kills: 0, deaths: 0, assists: 0, wardsPlaced: 0, wardsKilled: 0, buildingKill: 0, eliteMonsterKill: 0 };
+  const opponentPlayerEventScores = { ...mainPlayerEventScores };
+
   for (const frame of timeline.info.frames) {
-    // 1分以降のフレームのみを処理
-    if (frame.timestamp === 0) continue;
+    const processedWardEvents = new Set();
 
-    const processedWardEvents = new Set(); // このフレームで処理したワードイベントを記録
-
-    // フレーム内のイベントを処理
     for (const event of frame.events) {
-      // イベントベースのスコアを更新
       updateEventScores(event, mainPlayerId, opponentPlayerId, mainPlayerEventScores, opponentPlayerEventScores, processedWardEvents);
-      // チャートに表示する重要なゲームイベントを収集
-      collectGameEvents(event, mainPlayerId, opponentPlayerId, gameEvents);
+      if (frame.timestamp !== 0) {
+        collectGameEvents(event, mainPlayerId, opponentPlayerId, gameEvents);
+      }
     }
+
+    if (frame.timestamp === 0) continue;
 
     const mainPlayerFrame = frame.participantFrames[mainPlayerId];
     const opponentPlayerFrame = frame.participantFrames[opponentPlayerId];
@@ -82,26 +56,27 @@ export function processTimelineData(timeline, mainPlayerId, opponentPlayerId) {
 
       const mainPlayerTotalScore = calculateTotalScore(mainPlayerStats);
       const opponentPlayerTotalScore = calculateTotalScore(opponentPlayerStats);
-
       const scoreDifference = mainPlayerTotalScore - opponentPlayerTotalScore;
 
       chartData.push({
-        time: frame.timestamp / 60000, // msを分に変換
+        time: frame.timestamp / 60000,
         scoreDifference,
         mainPlayerScore: mainPlayerTotalScore,
         opponentPlayerScore: opponentPlayerTotalScore,
         mainPlayerStats,
         opponentPlayerStats,
       });
+      scoreDifferences.push(scoreDifference);
     }
   }
 
-  return { chartData, gameEvents };
+  const averageScoreDifference = scoreDifferences.length > 0
+    ? Math.round(scoreDifferences.reduce((a, b) => a + b, 0) / scoreDifferences.length)
+    : 0;
+
+  return { chartData, gameEvents, averageScoreDifference };
 }
 
-/**
- * イベントオブジェクトを元に、プレイヤーのイベントスコアを更新します。
- */
 function updateEventScores(event, mainPlayerId, opponentPlayerId, mainPlayerEventScores, opponentPlayerEventScores, processedWardEvents) {
   switch (event.type) {
     case 'CHAMPION_KILL':
@@ -121,22 +96,18 @@ function updateEventScores(event, mainPlayerId, opponentPlayerId, mainPlayerEven
 
     case 'WARD_PLACED':
       const wardPlacedKey = `placed-${event.creatorId}-${event.timestamp}`;
-      if (processedWardEvents.has(wardPlacedKey)) break; // 重複はスキップ
-
+      if (processedWardEvents.has(wardPlacedKey)) break;
       if (event.creatorId === mainPlayerId) mainPlayerEventScores.wardsPlaced += 1;
       else if (event.creatorId === opponentPlayerId) opponentPlayerEventScores.wardsPlaced += 1;
-      
-      processedWardEvents.add(wardPlacedKey); // 処理済みとして記録
+      processedWardEvents.add(wardPlacedKey);
       break;
 
     case 'WARD_KILL':
       const wardKillKey = `killed-${event.killerId}-${event.timestamp}`;
-      if (processedWardEvents.has(wardKillKey)) break; // 重複はスキップ
-
+      if (processedWardEvents.has(wardKillKey)) break;
       if (event.killerId === mainPlayerId) mainPlayerEventScores.wardsKilled += 1;
       else if (event.killerId === opponentPlayerId) opponentPlayerEventScores.wardsKilled += 1;
-      
-      processedWardEvents.add(wardKillKey); // 処理済みとして記録
+      processedWardEvents.add(wardKillKey);
       break;
 
     case 'BUILDING_KILL':
@@ -151,31 +122,22 @@ function updateEventScores(event, mainPlayerId, opponentPlayerId, mainPlayerEven
   }
 }
 
-/**
- * チャートに表示するための重要なゲームイベントを収集します。
- */
 function collectGameEvents(event, mainPlayerId, opponentPlayerId, gameEvents) {
-  const time = event.timestamp / 60000; // msを分に変換
+  const time = event.timestamp / 60000;
 
   if (event.type === 'CHAMPION_KILL') {
-    // 自身または対面がキルした場合のみイベントを収集
     if (event.killerId === mainPlayerId || event.killerId === opponentPlayerId) {
       gameEvents.push({ type: 'KILL', time, killerId: event.killerId, victimId: event.victimId });
     }
   } else if (event.type === 'BUILDING_KILL' || event.type === 'ELITE_MONSTER_KILL') {
-    // 自身または対面が関与するオブジェクト取得イベントのみを収集
     if (event.killerId === mainPlayerId || event.killerId === opponentPlayerId) {
       gameEvents.push({ type: 'OBJECTIVE', time, killerId: event.killerId, objectiveType: event.buildingType || event.monsterType });
     }
   }
 }
 
-/**
- * 特定のフレームにおけるプレイヤーの各スタッツのスコアを計算します。
- */
 function calculateFrameStats(pFrame, eventScores) {
   const { damageStats } = pFrame;
-  // 元の値を保持するオブジェクト
   const rawStats = {
     gold: pFrame.totalGold ?? 0,
     kills: eventScores.kills,
@@ -189,7 +151,6 @@ function calculateFrameStats(pFrame, eventScores) {
     eliteMonsters: eventScores.eliteMonsterKill,
   };
 
-  // ウェイト適用後のスコアを計算
   const weightedStats = {
     gold: rawStats.gold * SCORE_WEIGHTS.totalGold,
     kills: rawStats.kills * SCORE_WEIGHTS.kills,
@@ -203,7 +164,6 @@ function calculateFrameStats(pFrame, eventScores) {
     eliteMonsters: rawStats.eliteMonsters * SCORE_WEIGHTS.eliteMonsterKill,
   };
 
-  // 表示用に両方の値を持つオブジェクトを作成
   const displayStats = {};
   for (const key in rawStats) {
     displayStats[key] = {
