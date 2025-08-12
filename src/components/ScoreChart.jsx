@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { path } from 'd3-path';
 import { getPlayerName } from '../utils/player';
+import MobileScoreBreakdownTable from './MobileScoreBreakdownTable';
 
 // --- 定数定義 ---
 const SVG_WIDTH = 1000;
@@ -101,20 +102,20 @@ const STAT_LABELS = {
 
 const formatScore = (score) => Math.round(score).toLocaleString();
 
-const PlayerInfoColumn = ({ player, stats, totalScore, isMainPlayer }) => {
+const PlayerInfoColumn = ({ player, stats, totalScore, isMainPlayer, isMobileView }) => {
     const nameColor = isMainPlayer ? 'text-cyan-400' : 'text-red-400';
     const bgColor = isMainPlayer ? 'bg-cyan-950/10' : 'bg-red-950/10';
     const playerName = getPlayerName(player);
 
     return (
-        <div className={`flex-1 p-2 rounded-lg ${bgColor}`}>
+        <div className={`flex-1 p-1 sm:p-2 rounded-lg ${bgColor} ${isMobileView ? 'w-full' : ''}`}>
             {/* Header */}
             <div className="text-center">
                 <div className="flex justify-center items-baseline gap-2">
-                    <p className="text-xs text-slate-400">合計スコア</p>
-                    <h4 className={`text-lg font-bold ${nameColor}`}>{playerName}</h4>
+                    <p className={`text-slate-400 ${isMobileView ? 'text-xs' : 'text-xs'}`}>合計スコア</p>
+                    <h4 className={`font-bold ${nameColor} ${isMobileView ? 'text-base' : 'text-lg'}`} style={{ overflowWrap: 'break-word' }}>{playerName}</h4>
                 </div>
-                <p className="text-xl font-semibold mt-1">{formatScore(totalScore)}</p>
+                <p className={`font-semibold mt-1 ${isMobileView ? 'text-lg' : 'text-xl'}`}>{formatScore(totalScore)}</p>
             </div>
             {/* Table */}
             <div className="text-sm">
@@ -123,15 +124,15 @@ const PlayerInfoColumn = ({ player, stats, totalScore, isMainPlayer }) => {
                         <tr className="border-b border-gray-600">
                         {isMainPlayer ? (
                             <>
-                            <th className="py-2 px-3 text-slate-400 font-semibold">項目</th>
-                            <th className="py-2 px-3 text-slate-400 font-semibold text-right">元の値</th>
-                            <th className="py-2 px-3 text-slate-400 font-semibold text-right">スコア</th>
+                            <th className={`py-2 px-1 sm:px-3 text-slate-400 font-semibold ${isMobileView ? 'text-xs' : 'text-sm'}`}>項目</th>
+                            <th className={`py-2 px-1 sm:px-3 text-slate-400 font-semibold text-right ${isMobileView ? 'text-xs' : 'text-sm'}`}>元の値</th>
+                            <th className={`py-2 px-1 sm:px-3 text-slate-400 font-semibold text-right ${isMobileView ? 'text-xs' : 'text-sm'}`}>スコア</th>
                             </>
                         ) : (
                             <>
-                            <th className="py-2 px-3 text-slate-400 font-semibold">スコア</th>
-                            <th className="py-2 px-3 text-slate-400 font-semibold">元の値</th>
-                            <th className="py-2 px-3 text-slate-400 font-semibold">項目</th>
+                            <th className={`py-2 px-1 sm:px-3 text-slate-400 font-semibold ${isMobileView ? 'text-xs' : 'text-sm'}`}>スコア</th>
+                            <th className={`py-2 px-1 sm:px-3 text-slate-400 font-semibold ${isMobileView ? 'text-xs' : 'text-sm'}`}>元の値</th>
+                            <th className={`py-2 px-1 sm:px-3 text-slate-400 font-semibold ${isMobileView ? 'text-xs' : 'text-sm'}`}>項目</th>
                             </>
                         )}
                         </tr>
@@ -141,19 +142,19 @@ const PlayerInfoColumn = ({ player, stats, totalScore, isMainPlayer }) => {
                         <tr key={key} className="border-b border-gray-800 hover:bg-gray-700/50">
                             {isMainPlayer ? (
                             <>
-                                <td className="py-1 px-3 text-slate-400">{STAT_LABELS[key]}</td>
-                                <td className="py-1 px-3 text-right text-slate-300 font-semibold">{formatScore(value.raw)}</td>
-                                <td className={`py-1 px-3 text-right font-medium font-semibold ${value.weighted >= 0 ? 'text-slate-200' : 'text-red-400'}`}>
+                                <td className={`py-1 px-1 sm:px-3 text-slate-400 ${isMobileView ? 'text-xs' : 'text-sm'}`} style={{ overflowWrap: 'break-word' }}>{STAT_LABELS[key]}</td>
+                                <td className={`py-1 px-1 sm:px-3 text-right text-slate-300 font-semibold ${isMobileView ? 'text-xs' : 'text-sm'}`}>{formatScore(value.raw)}</td>
+                                <td className={`py-1 px-1 sm:px-3 text-right font-medium font-semibold ${value.weighted >= 0 ? 'text-slate-200' : 'text-red-400'} ${isMobileView ? 'text-xs' : 'text-sm'}`}>
                                 {formatScore(value.weighted)}
                                 </td>
                             </>
                             ) : (
                             <>
-                                <td className={`py-1 px-3 font-medium font-semibold ${value.weighted >= 0 ? 'text-slate-200' : 'text-red-400'}`}>
+                                <td className={`py-1 px-1 sm:px-3 font-medium font-semibold ${value.weighted >= 0 ? 'text-slate-200' : 'text-red-400'} ${isMobileView ? 'text-xs' : 'text-sm'}`}>
                                 {formatScore(value.weighted)}
                                 </td>
-                                <td className="py-1 px-3 text-slate-300 font-semibold">{formatScore(value.raw)}</td>
-                                <td className="py-1 px-3 text-slate-400">{STAT_LABELS[key]}</td>
+                                <td className={`py-1 px-1 sm:px-3 text-slate-300 font-semibold ${isMobileView ? 'text-xs' : 'text-sm'}`}>{formatScore(value.raw)}</td>
+                                <td className={`py-1 px-1 sm:px-3 text-slate-400 ${isMobileView ? 'text-xs' : 'text-sm'}`} style={{ overflowWrap: 'break-word' }}>{STAT_LABELS[key]}</td>
                             </>
                             )}
                         </tr>
@@ -165,12 +166,12 @@ const PlayerInfoColumn = ({ player, stats, totalScore, isMainPlayer }) => {
     );
 };
 
-const CenterColumn = ({ time, mainPlayerStats, opponentPlayerStats, showRawValueDiff, onToggleView }) => (
-    <div className="flex-shrink-0 w-15 cursor-pointer group" onClick={onToggleView}>
+const CenterColumn = ({ time, mainPlayerStats, opponentPlayerStats, showRawValueDiff, onToggleView, isMobileView }) => (
+    <div className={`flex-shrink-0 cursor-pointer group ${isMobileView ? 'w-full' : 'w-20 text-center'}`} onClick={onToggleView}>
         {/* Header */}
         <div className="text-center mb-2 h-[60px] flex flex-col justify-end">
-            <p className="text-xs text-slate-400">タイムスタンプ</p>
-            <p className="text-xl font-semibold">
+            <p className={`text-slate-400 ${isMobileView ? 'text-xs' : 'text-xs'}`}>タイムスタンプ</p>
+            <p className={`font-semibold ${isMobileView ? 'text-lg' : 'text-xl'}`}>
                 {Math.floor(time)}:{Math.round((time % 1) * 60).toString().padStart(2, '0')}
             </p>
         </div>
@@ -179,7 +180,7 @@ const CenterColumn = ({ time, mainPlayerStats, opponentPlayerStats, showRawValue
             <table className="w-full border-collapse">
                 <thead>
                     <tr className="border-b border-gray-600">
-                        <th className="py-2 px-3 text-slate-400 font-semibold text-center group-hover:text-cyan-400 transition-colors">
+                        <th className={`py-2 px-3 text-slate-400 font-semibold text-center group-hover:text-cyan-400 transition-colors ${isMobileView ? 'text-xs min-w-[5rem]' : 'min-w-[4rem]'}`}>
                             {showRawValueDiff ? '元値差' : 'スコア差'}
                         </th>
                     </tr>
@@ -198,7 +199,7 @@ const CenterColumn = ({ time, mainPlayerStats, opponentPlayerStats, showRawValue
 
                         return (
                             <tr key={key} className="border-b border-gray-800">
-                                <td className={`py-1 px-3 text-center font-semibold ${color}`}>
+                                <td className={`py-1 px-3 text-center font-semibold ${color} ${isMobileView ? 'text-xs' : ''}`}>
                                     {sign}{formatScore(diff)}
                                 </td>
                             </tr>
@@ -220,6 +221,7 @@ const ScoreChart = ({
   opponentPlayerColor,
   mainPlayer,
   opponent,
+  isMobileView, // Add this
 }) => {
   const svgRef = useRef(null);
   const [hoverX, setHoverX] = useState(null);
@@ -325,6 +327,8 @@ const ScoreChart = ({
         Math.abs(curr.time - timeAtClick) < Math.abs(prev.time - timeAtClick) ? curr : prev
       );
       setLockedData(closestPoint);
+    } else {
+      setLockedData(null); // Unlock if clicked outside chart area
     }
   };
 
@@ -413,34 +417,47 @@ const ScoreChart = ({
         </svg>
       </div>
 
-      <div className="w-full max-w-5xl mt-1 p-4 bg-gray-900/50 rounded-lg text-slate-200 shadow-lg min-h-[300px]">
+      <div className="w-full max-w-5xl mt-1 p-2 sm:p-4 bg-gray-900/50 rounded-lg text-slate-200 shadow-lg min-h-[300px]">
         {displayData ? (
-          <div className="flex gap-2 justify-center items-start">
-            {mainPlayer && displayData.mainPlayerStats && 
-                <PlayerInfoColumn 
-                    player={mainPlayer} 
-                    stats={displayData.mainPlayerStats} 
-                    totalScore={displayData.mainPlayerScore} 
-                    isMainPlayer={true} 
-                />}
+          isMobileView ? (
+            <MobileScoreBreakdownTable
+              displayData={displayData}
+              mainPlayer={mainPlayer}
+              opponent={opponent}
+              showRawValueDiff={showRawValueDiff}
+              onToggleView={handleToggleDiffView}
+            />
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 justify-center items-start">
+              {mainPlayer && displayData.mainPlayerStats && 
+                  <PlayerInfoColumn 
+                      player={mainPlayer} 
+                      stats={displayData.mainPlayerStats} 
+                      totalScore={displayData.mainPlayerScore} 
+                      isMainPlayer={true} 
+                      isMobileView={isMobileView}
+                  />}
             
-            {mainPlayer && opponent && 
-                <CenterColumn 
-                    time={displayData.time} 
-                    mainPlayerStats={displayData.mainPlayerStats} 
-                    opponentPlayerStats={displayData.opponentPlayerStats} 
-                    showRawValueDiff={showRawValueDiff}
-                    onToggleView={handleToggleDiffView}
-                />}
+              {mainPlayer && opponent && 
+                  <CenterColumn 
+                      time={displayData.time} 
+                      mainPlayerStats={displayData.mainPlayerStats} 
+                      opponentPlayerStats={displayData.opponentPlayerStats} 
+                      showRawValueDiff={showRawValueDiff}
+                      onToggleView={handleToggleDiffView}
+                      isMobileView={isMobileView}
+                  />}
 
-            {opponent && displayData.opponentPlayerStats && 
-                <PlayerInfoColumn 
-                    player={opponent} 
-                    stats={displayData.opponentPlayerStats} 
-                    totalScore={displayData.opponentPlayerScore} 
-                    isMainPlayer={false} 
-                />}
-          </div>
+              {opponent && displayData.opponentPlayerStats && 
+                  <PlayerInfoColumn 
+                      player={opponent} 
+                      stats={displayData.opponentPlayerStats} 
+                      totalScore={displayData.opponentPlayerScore} 
+                      isMainPlayer={false} 
+                      isMobileView={isMobileView}
+                  />}
+            </div>
+          )
         ) : (
           <div className="flex items-center justify-center h-full">
             <p className="text-center text-slate-400">グラフをクリックして、特定の時点での詳細データを表示します。</p>

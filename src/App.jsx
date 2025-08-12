@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import SearchForm from './components/SearchForm';
 import MatchHistory from './components/MatchHistory';
 import { getAccountByRiotId, getMatchIdsByPuuid, getMatchDetails, getMatchTimeline } from './api/riotApi';
@@ -28,6 +28,20 @@ function App() {
   const [chartData, setChartData] = useState([]);
   const [gameEvents, setGameEvents] = useState([]);
   const [roleScoreDifferences, setRoleScoreDifferences] = useState({});
+
+  // Mobile view state
+  const [isMobileView, setIsMobileView] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileView(window.innerWidth < 768); // Breakpoint for mobile
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Set initial value
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const fetchFullMatchDetails = useCallback(async (matchIds) => {
     return Promise.all(
@@ -237,6 +251,7 @@ function App() {
           onLoadMore={handleLoadMore}
           hasMore={hasMoreMatches || allMatchIds.length > allMatchData.length}
           loading={loading}
+          isMobileView={isMobileView}
         />
       </main>
       <footer className="text-center text-xs text-slate-500 py-6 px-4 max-w-3xl mx-auto">
