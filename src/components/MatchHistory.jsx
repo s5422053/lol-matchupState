@@ -92,6 +92,7 @@ const MatchHistory = ({
   chartData,
   gameEvents,
   selectedRole,
+  roleScoreDifferences, // Add this
   onPlayerSelect,
   onSearchPlayer,
   // Props for loading more
@@ -126,6 +127,7 @@ const MatchHistory = ({
                 chartData={chartData}
                 gameEvents={gameEvents}
                 selectedRole={selectedRole}
+                roleScoreDifferences={roleScoreDifferences} // And pass it here
                 onPlayerSelect={onPlayerSelect}
                 onSearchPlayer={onSearchPlayer}
               />

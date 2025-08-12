@@ -25,6 +25,7 @@ const MatchDetail = ({
   chartData,
   gameEvents,
   selectedRole,
+  roleScoreDifferences,
   onPlayerSelect, // For role switching
   onSearchPlayer, // For searching a new player
 }) => {
@@ -93,24 +94,33 @@ const MatchDetail = ({
         <div className="flex justify-center items-center gap-4">
             {Object.entries(ROLES).map(([apiRole, roleInfo]) => {
                 const isActive = selectedRole === apiRole;
-                // Check if players exist for this role on both teams
                 const allyPlayer = roleMappings[userTeamId]?.[apiRole];
                 const enemyPlayer = roleMappings[userTeamId === 100 ? 200 : 100]?.[apiRole];
                 const isDisabled = !allyPlayer || !enemyPlayer;
 
+                const score = roleScoreDifferences[apiRole];
+                const scoreColor = score > 0 ? 'text-blue-400' : score < 0 ? 'text-red-400' : 'text-slate-400';
+                const scoreSign = score > 0 ? '+' : '';
+
                 return (
-                    <button 
-                        key={apiRole}
-                        onClick={() => onPlayerSelect(apiRole)}
-                        title={isDisabled ? `${roleInfo.label}のプレイヤーが見つかりません` : roleInfo.label}
-                        disabled={isDisabled}
-                        className={`p-2 rounded-lg transition-all duration-200 border-2 ${isActive ? 'border-cyan-500 bg-gray-700' : 'border-transparent hover:bg-gray-700'} ${isDisabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
-                        <img 
-                            src={roleInfo.icon}
-                            alt={roleInfo.label}
-                            className={`w-10 h-10 transition-all duration-200 ${isActive ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
-                        />
-                    </button>
+                    <div key={apiRole} className="flex flex-col items-center gap-1 w-16">
+                        <button 
+                            onClick={() => onPlayerSelect(apiRole)}
+                            title={isDisabled ? `${roleInfo.label}のプレイヤーが見つかりません` : roleInfo.label}
+                            disabled={isDisabled}
+                            className={`p-2 rounded-lg transition-all duration-200 border-2 ${isActive ? 'border-cyan-500 bg-gray-700' : 'border-transparent hover:bg-gray-700'} ${isDisabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                            <img 
+                                src={roleInfo.icon}
+                                alt={roleInfo.label}
+                                className={`w-10 h-10 transition-all duration-200 ${isActive ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                            />
+                        </button>
+                        {score !== null && typeof score !== 'undefined' && (
+                            <p className={`text-xs font-bold ${scoreColor}`}>
+                                {scoreSign}{score.toLocaleString()}
+                            </p>
+                        )}
+                    </div>
                 )
             })}
         </div>

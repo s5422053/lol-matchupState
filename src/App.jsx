@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import SearchForm from './components/SearchForm';
 import MatchHistory from './components/MatchHistory';
-import MatchDetail from './components/MatchDetail'; // MatchDetailを直接使う可能性
 import { getAccountByRiotId, getMatchIdsByPuuid, getMatchDetails, getMatchTimeline } from './api/riotApi';
 import { processTimelineData } from './utils/scoreCalculator';
 
 const MATCH_COUNT_PER_PAGE = 5;
 const MATCH_ID_COUNT_PER_API_CALL = 100;
+const ROLES = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];
 
 function App() {
   // Search and data states
@@ -26,6 +26,7 @@ function App() {
   const [opponent, setOpponent] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [gameEvents, setGameEvents] = useState([]);
+  const [roleScoreDifferences, setRoleScoreDifferences] = useState({});
 
   const fetchFullMatchDetails = useCallback(async (matchIds) => {
     return Promise.all(
@@ -59,6 +60,7 @@ function App() {
     setChartData([]);
     setGameEvents([]);
     setSelectedRole(null);
+    setRoleScoreDifferences({});
 
     try {
       const account = await getAccountByRiotId(gameName, tagLine);
@@ -100,10 +102,8 @@ function App() {
     try {
       let newMatchIds = [];
       if (currentDataCount < currentIdCount) {
-        // Load more from existing allMatchIds
         newMatchIds = allMatchIds.slice(currentDataCount, currentDataCount + MATCH_COUNT_PER_PAGE);
       } else if (hasMoreMatches) {
-        // Fetch new match IDs from API
         const fetchedIds = await getMatchIdsByPuuid(searchedPuuid, { start: apiMatchStart, count: MATCH_ID_COUNT_PER_API_CALL });
         if (fetchedIds.length < MATCH_ID_COUNT_PER_API_CALL) {
           setHasMoreMatches(false);
@@ -138,6 +138,7 @@ function App() {
   const handleSelectMatch = useCallback((matchId) => {
     if (selectedMatchId === matchId) {
       setSelectedMatchId(null);
+      setRoleScoreDifferences({});
       return;
     }
     
@@ -148,9 +149,26 @@ function App() {
     const initialPlayer = match.info.participants.find(p => p.puuid === puuid);
     if (!initialPlayer) return;
 
+    // Calculate score differences for all roles
+    const userTeamId = initialPlayer.teamId;
+    const opponentTeamId = userTeamId === 100 ? 200 : 100;
+    const scoreDiffs = {};
+    for (const role of ROLES) {
+        const allyPlayer = match.info.participants.find(p => p.teamId === userTeamId && p.teamPosition === role);
+        const enemyPlayer = match.info.participants.find(p => p.teamId === opponentTeamId && p.teamPosition === role);
+
+        if (allyPlayer && enemyPlayer) {
+            const { averageScoreDifference } = processTimelineData(timeline, allyPlayer.puuid, enemyPlayer.puuid);
+            scoreDiffs[role] = averageScoreDifference;
+        } else {
+            scoreDiffs[role] = null;
+        }
+    }
+    setRoleScoreDifferences(scoreDiffs);
+
+    // Set initial player and chart data
     const initialOpponent = match.info.participants.find(p => p.teamId !== initialPlayer.teamId && p.teamPosition === initialPlayer.teamPosition);
     const initialRole = initialPlayer.teamPosition;
-
     const { chartData, gameEvents } = processTimelineData(timeline, initialPlayer.puuid, initialOpponent?.puuid);
 
     setMainPlayer(initialPlayer);
@@ -204,6 +222,7 @@ function App() {
           chartData={chartData}
           gameEvents={gameEvents}
           selectedRole={selectedRole}
+          roleScoreDifferences={roleScoreDifferences}
           onPlayerSelect={handlePlayerSelect}
           onSearchPlayer={handleSearch}
           // Props for loading more
