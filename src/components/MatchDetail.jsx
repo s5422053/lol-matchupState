@@ -103,7 +103,7 @@ const MatchDetail = ({
                 const scoreSign = score > 0 ? '+' : '';
 
                 return (
-                    <div key={apiRole} className="flex flex-col items-center gap-1 w-16">
+                    <div key={apiRole} className="flex flex-col items-center w-16">
                         <button 
                             onClick={() => onPlayerSelect(apiRole)}
                             title={isDisabled ? `${roleInfo.label}のプレイヤーが見つかりません` : roleInfo.label}

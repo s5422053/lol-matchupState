@@ -18,6 +18,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchedPuuid, setSearchedPuuid] = useState(null);
+  const [displayRiotId, setDisplayRiotId] = useState(null);
 
   // Selected match and player states
   const [selectedMatchId, setSelectedMatchId] = useState(null);
@@ -51,10 +52,10 @@ function App() {
     setAllMatchIds([]);
     setSelectedMatchId(null);
     setSearchedPuuid(null);
+    setDisplayRiotId(null);
     setDisplayedMatchesCount(MATCH_COUNT_PER_PAGE);
     setApiMatchStart(0);
     setHasMoreMatches(true);
-    // Reset player/chart states
     setMainPlayer(null);
     setOpponent(null);
     setChartData([]);
@@ -65,6 +66,7 @@ function App() {
     try {
       const account = await getAccountByRiotId(gameName, tagLine);
       setSearchedPuuid(account.puuid);
+      setDisplayRiotId({ gameName, tagLine }); // Set display Riot ID on successful search
 
       const matchIds = await getMatchIdsByPuuid(account.puuid, { start: 0, count: MATCH_ID_COUNT_PER_API_CALL });
       setAllMatchIds(matchIds);
@@ -88,6 +90,7 @@ function App() {
 
     } catch (err) {
       console.error(err);
+      setDisplayRiotId(null); // Clear display name on error
       setError(err.response?.status === 404 ? 'プレイヤーが見つかりませんでした。' : 'データの取得に失敗しました。APIキーが有効か確認してください。');
     } finally {
       setLoading(false);
@@ -149,7 +152,6 @@ function App() {
     const initialPlayer = match.info.participants.find(p => p.puuid === puuid);
     if (!initialPlayer) return;
 
-    // Calculate score differences for all roles
     const userTeamId = initialPlayer.teamId;
     const opponentTeamId = userTeamId === 100 ? 200 : 100;
     const scoreDiffs = {};
@@ -166,7 +168,6 @@ function App() {
     }
     setRoleScoreDifferences(scoreDiffs);
 
-    // Set initial player and chart data
     const initialOpponent = match.info.participants.find(p => p.teamId !== initialPlayer.teamId && p.teamPosition === initialPlayer.teamPosition);
     const initialRole = initialPlayer.teamPosition;
     const { chartData, gameEvents } = processTimelineData(timeline, initialPlayer.puuid, initialOpponent?.puuid);
@@ -209,6 +210,13 @@ function App() {
 
         {loading && allMatchData.length === 0 && <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-400"></div>}
         {error && <p className="bg-red-900/50 text-red-300 border border-red-500 rounded-md px-4 py-2">{error}</p>}
+
+        {displayRiotId && !error && allMatchData.length > 0 && (
+          <div className="text-center -mb-4">
+            <p className="text-slate-400">表示中の対戦履歴:</p>
+            <h2 className="text-2xl font-bold text-cyan-300">{displayRiotId.gameName}#{displayRiotId.tagLine}</h2>
+          </div>
+        )}
 
         <MatchHistory
           matches={allMatchData}
