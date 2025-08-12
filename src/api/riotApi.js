@@ -32,6 +32,8 @@ const fetchFromApi = async (requestUrl) => {
   }
 };
 
+const apiCache = new Map(); // Global cache object
+
 export const getAccountByRiotId = async (gameName, tagLine) => {
   const endpoint = isDevelopment
     ? `/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`
@@ -48,15 +50,33 @@ export const getMatchIdsByPuuid = async (puuid, params) => {
 };
 
 export const getMatchDetails = async (matchId) => {
+  const cacheKey = `matchDetails-${matchId}`;
+  if (apiCache.has(cacheKey)) {
+    console.log(`Cache hit for ${cacheKey}`);
+    return apiCache.get(cacheKey);
+  }
+
   const endpoint = isDevelopment 
     ? `/lol/match/v5/matches/${matchId}`
     : `${MATCH_V5_RIOT_URL}/${matchId}`;
-  return fetchFromApi(endpoint);
+  const data = await fetchFromApi(endpoint);
+  apiCache.set(cacheKey, data);
+  console.log(`Cache set for ${cacheKey}`);
+  return data;
 };
 
 export const getMatchTimeline = async (matchId) => {
+  const cacheKey = `matchTimeline-${matchId}`;
+  if (apiCache.has(cacheKey)) {
+    console.log(`Cache hit for ${cacheKey}`);
+    return apiCache.get(cacheKey);
+  }
+
   const endpoint = isDevelopment
     ? `/lol/match/v5/matches/${matchId}/timeline`
     : `${MATCH_V5_RIOT_URL}/${matchId}/timeline`;
-  return fetchFromApi(endpoint);
+  const data = await fetchFromApi(endpoint);
+  apiCache.set(cacheKey, data);
+  console.log(`Cache set for ${cacheKey}`);
+  return data;
 };
