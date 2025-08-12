@@ -302,7 +302,7 @@ const ScoreChart = ({
       );
       setHoveredData(closestPoint);
 
-      // Update simpleTooltipPos
+      // Update simpleTooltipPos 
       if (!isMobileView) { // Only show on PC
         const tooltipY = event.clientY - svgRect.top + 10; // Offset from mouse Y
         setSimpleTooltipPos({
