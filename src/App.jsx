@@ -3,6 +3,7 @@ import SearchForm from './components/SearchForm';
 import MatchHistory from './components/MatchHistory';
 import { getAccountByRiotId, getMatchIdsByPuuid, getMatchDetails, getMatchTimeline } from './api/riotApi';
 import { processTimelineData } from './utils/scoreCalculator';
+import { fetchLatestDdragonVersion } from './utils/ddragon';
 
 const MATCH_COUNT_PER_PAGE = 5;
 const MATCH_ID_COUNT_PER_API_CALL = 100;
@@ -33,6 +34,8 @@ function App() {
   const [isMobileView, setIsMobileView] = useState(false);
 
   useEffect(() => {
+    fetchLatestDdragonVersion();
+
     const handleResize = () => {
       setIsMobileView(window.innerWidth < 768); // Breakpoint for mobile
     };
@@ -42,6 +45,7 @@ function App() {
 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
 
   const fetchFullMatchDetails = useCallback(async (matchIds) => {
     return Promise.all(
