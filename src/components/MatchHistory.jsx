@@ -39,7 +39,7 @@ const MatchSummary = ({ matchData, onSelectMatch, selectedMatchId, puuid, isMobi
     ? 'border-l-4 border-blue-500 hover:border-blue-400'
     : 'border-l-4 border-red-500 hover:border-red-400';
   const selectedClass = isSelected
-    ? '!border-cyan-400 scale-105 shadow-lg shadow-cyan-500/10'
+    ? 'scale-105 shadow-lg shadow-cyan-500/10'
     : 'hover:bg-gray-700/50';
 
   const averageScoreDifference = matchData.averageScoreDifference || 0;
